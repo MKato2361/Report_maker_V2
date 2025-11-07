@@ -263,14 +263,19 @@ elif st.session_state.step == 2 and st.session_state.authed:
         st.error(f"テンプレートファイルが見つかりません: {template_path}")
         st.stop()
 
+    # 所属入力
     aff = st.text_input("所属（例：札幌支店 / 本社 / 道央サービスなど）", value=st.session_state.affiliation)
     st.session_state.affiliation = aff
+
+    # Step2入力：処理修理後
     processing_after = st.text_input("処理修理後（任意）")
     if processing_after:
         st.session_state["processing_after"] = processing_after
 
+    # 故障メール本文
     text = st.text_area("故障完了メール（本文）を貼り付け", height=240)
 
+    # ボタン群
     c1, c2 = st.columns(2)
     with c1:
         if st.button("抽出する", use_container_width=True):
@@ -285,6 +290,10 @@ elif st.session_state.step == 2 and st.session_state.authed:
         if st.button("クリア", use_container_width=True):
             st.session_state.extracted = None
             st.session_state.affiliation = ""
+
+# -------------------------------------------------------------
+# ✏️ 編集フィールド共通関数（Step3で利用）
+# -------------------------------------------------------------
 def editable_field(label, key, max_lines=1):
     """共通：左アイコン付きの編集UI"""
     data = st.session_state.extracted
@@ -298,7 +307,6 @@ def editable_field(label, key, max_lines=1):
         lines = value.split("\n") if max_lines > 1 else [value]
         display_text = "<br>".join(lines)
 
-        # アイコン＋項目名＋値を同じ行に表示
         cols = st.columns([0.07, 0.93])
         with cols[0]:
             if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
@@ -311,6 +319,7 @@ def editable_field(label, key, max_lines=1):
     else:
         st.markdown(f"✏️ **{label} 編集中**")
         value = data.get(key) or ""
+
         if max_lines == 1:
             new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
         else:
@@ -327,7 +336,9 @@ def editable_field(label, key, max_lines=1):
                 st.session_state[edit_key] = False
                 st.rerun()
 
+# -------------------------------------------------------------
 # Step3: 抽出結果の確認・編集 → Excel生成
+# -------------------------------------------------------------
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
@@ -338,49 +349,21 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     data = st.session_state.extracted or {}
 
-
-
-    # ====== 表示・編集セクション ======
-    with st.expander("基本情報", expanded=True):
-        st.markdown(f"- 管理番号：{data.get('管理番号') or ''}")
-        st.markdown(f"- 物件名：{data.get('物件名') or ''}")
-        st.markdown(f"- 住所：{data.get('住所') or ''}")
-        st.markdown(f"- 窓口会社：{data.get('窓口会社') or ''}")
-
+    # --- 編集項目ブロック ---
     with st.expander("通報・受付情報", expanded=True):
-        st.markdown(f"- 受信時刻：{data.get('受信時刻') or ''}")
         editable_field("通報者", "通報者", 1)
         editable_field("受信内容", "受信内容", 4)
 
     with st.expander("現着・作業・完了情報", expanded=True):
-        st.markdown(f"- 現着時刻：{data.get('現着時刻') or ''}")
-        st.markdown(f"- 完了時刻：{data.get('完了時刻') or ''}")
-        dur = data.get("作業時間_分")
-        if dur:
-            st.info(f"作業時間（概算）：{dur} 分")
         editable_field("現着状況", "現着状況", 5)
         editable_field("原因", "原因", 5)
         editable_field("処置内容", "処置内容", 5)
         editable_field("処理修理後（Step2入力値）", "処理修理後", 1)
 
-    with st.expander("技術情報", expanded=False):
-        st.markdown(f"- 制御方式：{data.get('制御方式') or ''}")
-        st.markdown(f"- 契約種別：{data.get('契約種別') or ''}")
-        st.markdown(f"- メーカー：{data.get('メーカー') or ''}")
-
-    with st.expander("その他", expanded=False):
-        st.markdown(f"- 所属：{data.get('所属') or ''}")
-        st.markdown(f"- 対応者：{data.get('対応者') or ''}")
-        st.markdown(f"- 送信者：{data.get('送信者') or ''}")
-        st.markdown(f"- 受付番号：{data.get('受付番号') or ''}")
-        st.markdown(f"- 受付URL：{data.get('受付URL') or ''}")
-        st.markdown(f"- 現着・完了登録URL：{data.get('現着完了登録URL') or ''}")
-        st.markdown(f"- 案件種別(件名)：{data.get('案件種別(件名)') or ''}")
-
     st.divider()
 
-    # --- 元の命名規則を再利用 ---
-    def build_filename(data: Dict[str, Optional[str]]) -> str:
+    # --- Excelファイル名生成関数（従来の命名規則を維持） ---
+    def build_filename(data: dict) -> str:
         base_day = None
         for k in ["現着時刻", "完了時刻", "受信時刻"]:
             dt = _try_parse_datetime(data.get(k))
@@ -392,9 +375,11 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
         manageno = (data.get("管理番号") or "UNKNOWN").replace("/", "_")
         bname = (data.get("物件名") or "").strip().replace("/", "_")
+
         if bname:
             return f"緊急出動報告書_{manageno}_{bname}_{base_day}.xlsm"
-        return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
+        else:
+            return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
 
     # --- Excel出力 ---
     try:
@@ -408,9 +393,9 @@ elif st.session_state.step == 3 and st.session_state.authed:
             use_container_width=True,
         )
     except Exception as e:
-        st.error(f"テンプレートへの書き込みでエラーが発生しました: {e}")
+        st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
 
-    # --- 戻る操作 ---
+    # --- 戻るボタン群 ---
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Step2に戻る", use_container_width=True):
@@ -423,7 +408,9 @@ elif st.session_state.step == 3 and st.session_state.authed:
             st.session_state.affiliation = ""
             st.rerun()
 
-
+# -------------------------------------------------------------
+# Step1以前（認証なし状態）
+# -------------------------------------------------------------
 else:
     st.warning("認証が必要です。Step1に戻ります。")
     st.session_state.step = 1
