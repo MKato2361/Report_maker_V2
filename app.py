@@ -352,9 +352,8 @@ elif st.session_state.step == 3 and st.session_state.authed:
     with c1:
         if st.button("Step2に戻る", use_container_width=True):
             st.session_state.step = 2
-            st.rerun続き（下部）👇  
+            st.rerun()
 
-```python
     with c2:
         if st.button("最初に戻る", use_container_width=True):
             st.session_state.step = 1
