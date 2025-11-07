@@ -321,7 +321,7 @@ def editable_field(label, key, max_lines=1):
             st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
 
     # --- 編集モード ---
-else:
+    else:
         st.markdown(f"✏️ **{label} 編集中**")
         value = data.get(key) or ""
 
@@ -346,7 +346,3 @@ else:
             if st.button("❌ キャンセル", key=f"cancel_{key}"):
                 st.session_state[edit_key] = False
                 st.rerun()
-
-else:
-    st.warning("認証が必要です。Step1に戻ります。")
-    st.session_state.step = 1
