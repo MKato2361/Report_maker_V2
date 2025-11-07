@@ -380,7 +380,7 @@ def editable_field(label, key, max_lines=1):
     st.divider()
 
     # --- 元の命名規則を再利用 ---
-    def build_filename(data: Dict[str, Optional[str]]) -> str:
+def build_filename(data: Dict[str, Optional[str]]) -> str:
         base_day = None
         for k in ["現着時刻", "完了時刻", "受信時刻"]:
             dt = _try_parse_datetime(data.get(k))
@@ -423,7 +423,6 @@ def editable_field(label, key, max_lines=1):
             st.session_state.affiliation = ""
             st.rerun()
 
-
-    else:
-        st.warning("認証が必要です。Step1に戻ります。")
-        st.session_state.step = 1
+else:
+    st.warning("認証が必要です。Step1に戻ります。")
+    st.session_state.step = 1
