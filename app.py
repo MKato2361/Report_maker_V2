@@ -28,6 +28,48 @@ PASSCODE = st.secrets.get("APP_PASSCODE", PASSCODE_DEFAULT)
 SHEET_NAME = "緊急出動報告書（リンク付き）"
 WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]
 
+# -------------------------------------------------------------
+# ✏️ 編集フィールド共通関数（どのStepでも利用可能）
+# -------------------------------------------------------------
+def editable_field(label, key, max_lines=1):
+    """共通：左アイコン付きの編集UI"""
+    data = st.session_state.extracted
+    edit_key = f"edit_{key}"
+    if edit_key not in st.session_state:
+        st.session_state[edit_key] = False
+
+    # 通常表示モード
+    if not st.session_state[edit_key]:
+        value = data.get(key) or ""
+        lines = value.split("\n") if max_lines > 1 else [value]
+        display_text = "<br>".join(lines)
+        cols = st.columns([0.07, 0.93])
+        with cols[0]:
+            if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
+                st.session_state[edit_key] = True
+                st.rerun()
+        with cols[1]:
+            st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
+
+    # 編集モード
+    else:
+        st.markdown(f"✏️ **{label} 編集中**")
+        value = data.get(key) or ""
+        if max_lines == 1:
+            new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
+        else:
+            new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
+        c1, c2 = st.columns([0.3, 0.7])
+        with c1:
+            if st.button("💾 保存", key=f"save_{key}"):
+                st.session_state.extracted[key] = new_val
+                st.session_state[edit_key] = False
+                st.rerun()
+        with c2:
+            if st.button("❌ キャンセル", key=f"cancel_{key}"):
+                st.session_state[edit_key] = False
+                st.rerun()
+
 # ====== テキスト整形・抽出ユーティリティ ======
 def normalize_text(text: str) -> str:
     if not text:
@@ -158,7 +200,6 @@ def fill_template_xlsx(template_bytes: bytes, data: Dict[str, Optional[str]]) ->
     wb = load_workbook(io.BytesIO(template_bytes), keep_vba=True)
     ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
 
-    # --- 基本情報 ---
     if data.get("管理番号"): ws["C12"] = data["管理番号"]
     if data.get("メーカー"): ws["J12"] = data["メーカー"]
     if data.get("制御方式"): ws["M12"] = data["制御方式"]
@@ -172,7 +213,6 @@ def fill_template_xlsx(template_bytes: bytes, data: Dict[str, Optional[str]]) ->
     now = datetime.now(JST)
     ws["B5"], ws["D5"], ws["F5"] = now.year, now.month, now.day
 
-    # --- 日付・時刻ブロック ---
     def write_dt_block(base_row: int, src_key: str):
         dt = _try_parse_datetime(data.get(src_key))
         y, m, d, wd, hh, mm = _split_dt_components(dt)
@@ -189,7 +229,6 @@ def fill_template_xlsx(template_bytes: bytes, data: Dict[str, Optional[str]]) ->
     write_dt_block(19, "現着時刻")
     write_dt_block(36, "完了時刻")
 
-    # --- 複数行ブロック ---
     def fill_multiline(col_letter: str, start_row: int, text: Optional[str], max_lines: int = 5):
         lines = _split_lines(text, max_lines=max_lines)
         for i in range(max_lines):
@@ -200,18 +239,6 @@ def fill_template_xlsx(template_bytes: bytes, data: Dict[str, Optional[str]]) ->
     fill_multiline("C", 20, data.get("現着状況"))
     fill_multiline("C", 25, data.get("原因"))
     fill_multiline("C", 30, data.get("処置内容"))
-
-    # --- チェックボックス画像貼付 ---
-#    img_path = "check.png"
-#    if os.path.exists(img_path):
-#        try:
-#            img = XLImage(img_path)
-#            img.anchor = "I10"
-#            img.width = 400
-#            img.height = 40
-#            ws.add_image(img)
-#        except Exception as e:
-#            print("チェックボックス画像貼付中にエラー:", e)
 
     out = io.BytesIO()
     wb.save(out)
@@ -238,7 +265,7 @@ if "extracted" not in st.session_state:
 if "affiliation" not in st.session_state:
     st.session_state.affiliation = ""
 
-# Step 1: パスコード認証
+# Step1
 if st.session_state.step == 1:
     st.subheader("Step 1. パスコード認証")
     pw = st.text_input("パスコードを入力してください", type="password")
@@ -250,8 +277,7 @@ if st.session_state.step == 1:
         else:
             st.error("パスコードが違います。")
 
-# Step 2: メール本文＋テンプレ自動読み込み
-# Step2まで同じ
+# Step2
 elif st.session_state.step == 2 and st.session_state.authed:
     st.subheader("Step 2. メール本文の貼り付け / 所属")
     template_path = "template.xlsm"
@@ -287,71 +313,16 @@ elif st.session_state.step == 2 and st.session_state.authed:
             st.session_state.extracted = None
             st.session_state.affiliation = ""
 
-# -------------------------------------------------------------
-# ✏️ 編集フィールド共通関数（Step3で利用）
-# -------------------------------------------------------------
-# ✅ ここでifブロックが完全に終わるように、1行以上の空行を必ず入れる！
-# （これがないとelifが同じifチェーン扱いになり構文エラーになる）
-# -------------------------------------------------------------
-
-def editable_field(label, key, max_lines=1):
-    """共通：左アイコン付きの編集UI"""
-    data = st.session_state.extracted
-    edit_key = f"edit_{key}"
-    if edit_key not in st.session_state:
-        st.session_state[edit_key] = False
-
-    # 通常表示モード
-    if not st.session_state[edit_key]:
-        value = data.get(key) or ""
-        lines = value.split("\n") if max_lines > 1 else [value]
-        display_text = "<br>".join(lines)
-        cols = st.columns([0.07, 0.93])
-        with cols[0]:
-            if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
-                st.session_state[edit_key] = True
-                st.rerun()
-        with cols[1]:
-            st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
-
-    # 編集モード
-    else:
-        st.markdown(f"✏️ **{label} 編集中**")
-        value = data.get(key) or ""
-        if max_lines == 1:
-            new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
-        else:
-            new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
-        c1, c2 = st.columns([0.3, 0.7])
-        with c1:
-            if st.button("💾 保存", key=f"save_{key}"):
-                st.session_state.extracted[key] = new_val
-                st.session_state[edit_key] = False
-                st.rerun()
-        with c2:
-            if st.button("❌ キャンセル", key=f"cancel_{key}"):
-                st.session_state[edit_key] = False
-                st.rerun()
-
-
-# -------------------------------------------------------------
-# ✅ 空行がポイント！　これで elif が新しいトップレベル条件として認識されます
-# -------------------------------------------------------------
-
-
-# Step3: 抽出結果の確認・編集 → Excel生成
-
+# Step3
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
-    # Step2で入力した処理修理後を常に反映
     if st.session_state.get("processing_after"):
         if st.session_state.extracted is not None:
             st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
 
     data = st.session_state.extracted or {}
 
-    # --- 編集項目ブロック ---
     with st.expander("通報・受付情報", expanded=True):
         editable_field("通報者", "通報者", 1)
         editable_field("受信内容", "受信内容", 4)
@@ -364,26 +335,6 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     st.divider()
 
-    # --- Excelファイル名生成関数（従来の命名規則を維持） ---
-    def build_filename(data: dict) -> str:
-        base_day = None
-        for k in ["現着時刻", "完了時刻", "受信時刻"]:
-            dt = _try_parse_datetime(data.get(k))
-            if dt:
-                base_day = dt.strftime("%Y%m%d")
-                break
-        if base_day is None:
-            base_day = datetime.now(JST).strftime("%Y%m%d")
-
-        manageno = (data.get("管理番号") or "UNKNOWN").replace("/", "_")
-        bname = (data.get("物件名") or "").strip().replace("/", "_")
-
-        if bname:
-            return f"緊急出動報告書_{manageno}_{bname}_{base_day}.xlsm"
-        else:
-            return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
-
-    # --- Excel出力 ---
     try:
         xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
         fname = build_filename(data)
@@ -397,12 +348,13 @@ elif st.session_state.step == 3 and st.session_state.authed:
     except Exception as e:
         st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
 
-    # --- 戻るボタン群 ---
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Step2に戻る", use_container_width=True):
             st.session_state.step = 2
-            st.rerun()
+            st.rerun続き（下部）👇  
+
+```python
     with c2:
         if st.button("最初に戻る", use_container_width=True):
             st.session_state.step = 1
@@ -410,9 +362,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
             st.session_state.affiliation = ""
             st.rerun()
 
-# -------------------------------------------------------------
 # Step1以前（認証なし状態）
-# -------------------------------------------------------------
 else:
     st.warning("認証が必要です。Step1に戻ります。")
     st.session_state.step = 1
