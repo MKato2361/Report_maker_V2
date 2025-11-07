@@ -346,3 +346,7 @@ def editable_field(label, key, max_lines=1):
             if st.button("❌ キャンセル", key=f"cancel_{key}"):
                 st.session_state[edit_key] = False
                 st.rerun()
+
+else:
+    st.warning("認証が必要です。Step1に戻ります。")
+    st.session_state.step = 1
