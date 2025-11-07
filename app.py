@@ -344,6 +344,9 @@ def editable_field(label, key, max_lines=1):
 # -------------------------------------------------------------
 # Step3: 抽出結果の確認・編集 → Excel生成
 # -------------------------------------------------------------
+
+
+
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
