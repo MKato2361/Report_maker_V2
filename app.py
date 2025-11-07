@@ -313,28 +313,74 @@ elif st.session_state.step == 2 and st.session_state.authed:
             st.session_state.extracted = None
             st.session_state.affiliation = ""
 
-# Step3
+
+
+# -------------------------------------------------------------
+# Step3: 抽出結果の確認・編集 → Excel生成
+# -------------------------------------------------------------
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
+    # Step2で入力した処理修理後を常に反映
     if st.session_state.get("processing_after"):
         if st.session_state.extracted is not None:
             st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
 
     data = st.session_state.extracted or {}
 
-    with st.expander("通報・受付情報", expanded=True):
+    # -------------------------------------------------------------
+    # ① 基本情報（表示のみ）
+    # -------------------------------------------------------------
+    with st.expander("① 基本情報", expanded=True):
+        base_fields = ["管理番号", "物件名", "住所", "窓口会社"]
+        for key in base_fields:
+            val = data.get(key) or ""
+            st.markdown(f"**{key}：** {val}")
+
+    # -------------------------------------------------------------
+    # ② 通報・受付情報
+    # -------------------------------------------------------------
+    with st.expander("② 通報・受付情報", expanded=True):
+        st.markdown(f"**受信時刻：** {data.get('受信時刻') or ''}")
         editable_field("通報者", "通報者", 1)
         editable_field("受信内容", "受信内容", 4)
 
-    with st.expander("現着・作業・完了情報", expanded=True):
+    # -------------------------------------------------------------
+    # ③ 現着・作業・完了情報
+    # -------------------------------------------------------------
+    with st.expander("③ 現着・作業・完了情報", expanded=True):
+        st.markdown(f"**現着時刻：** {data.get('現着時刻') or ''}")
+        st.markdown(f"**完了時刻：** {data.get('完了時刻') or ''}")
+        st.markdown(f"**作業時間（分）：** {data.get('作業時間_分') or ''}")
         editable_field("現着状況", "現着状況", 5)
         editable_field("原因", "原因", 5)
         editable_field("処置内容", "処置内容", 5)
         editable_field("処理修理後（Step2入力値）", "処理修理後", 1)
 
+    # -------------------------------------------------------------
+    # ④ 技術情報
+    # -------------------------------------------------------------
+    with st.expander("④ 技術情報", expanded=False):
+        tech_fields = ["制御方式", "契約種別", "メーカー"]
+        for key in tech_fields:
+            val = data.get(key) or ""
+            st.markdown(f"**{key}：** {val}")
+
+    # -------------------------------------------------------------
+    # ⑤ その他情報
+    # -------------------------------------------------------------
+    with st.expander("⑤ その他情報", expanded=False):
+        other_fields = [
+            "所属", "対応者", "送信者",
+            "受付番号", "受付URL", "現着完了登録URL"
+        ]
+        for key in other_fields:
+            val = data.get(key) or ""
+            st.markdown(f"**{key}：** {val}")
+
     st.divider()
 
+    # --- Excel出力 ---
     try:
         xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
         fname = build_filename(data)
@@ -348,18 +394,19 @@ elif st.session_state.step == 3 and st.session_state.authed:
     except Exception as e:
         st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
 
+    # --- 戻るボタン群 ---
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Step2に戻る", use_container_width=True):
             st.session_state.step = 2
             st.rerun()
-
     with c2:
         if st.button("最初に戻る", use_container_width=True):
             st.session_state.step = 1
             st.session_state.extracted = None
             st.session_state.affiliation = ""
             st.rerun()
+
 
 # Step1以前（認証なし状態）
 else:
