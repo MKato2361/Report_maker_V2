@@ -348,5 +348,5 @@ def editable_field(label, key, max_lines=1):
                 st.rerun()
 
     else:
-        st.warning("認証が必要です。Step1に戻ります。")
-        st.session_state.step = 1
+    st.warning("認証が必要です。Step1に戻ります。")
+    st.session_state.step = 1
