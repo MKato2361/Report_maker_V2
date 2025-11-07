@@ -299,7 +299,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     # --- 編集可能フィールド ---
 def editable_field(label, key, max_lines=1):
-    """共通：左アイコン付きの編集UI（構文完全修正版）"""
+    """共通：左アイコン付きの編集UI（インデント完全修正版）"""
     data = st.session_state.extracted
     edit_key = f"edit_{key}"
     if edit_key not in st.session_state:
@@ -316,6 +316,7 @@ def editable_field(label, key, max_lines=1):
             if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
                 st.session_state[edit_key] = True
                 st.rerun()
+
         with cols[1]:
             st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
 
@@ -327,7 +328,12 @@ def editable_field(label, key, max_lines=1):
         if max_lines == 1:
             new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
         else:
-            new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
+            new_val = st.text_area(
+                f"{label}を入力",
+                value=value,
+                height=max_lines * 25,
+                key=f"ta_{key}"
+            )
 
         c1, c2 = st.columns([0.3, 0.7])
         with c1:
@@ -335,93 +341,11 @@ def editable_field(label, key, max_lines=1):
                 st.session_state.extracted[key] = new_val
                 st.session_state[edit_key] = False
                 st.rerun()
+
         with c2:
             if st.button("❌ キャンセル", key=f"cancel_{key}"):
                 st.session_state[edit_key] = False
                 st.rerun()
-
-    # ====== 表示・編集セクション ======
-    with st.expander("基本情報", expanded=True):
-        st.markdown(f"- 管理番号：{data.get('管理番号') or ''}")
-        st.markdown(f"- 物件名：{data.get('物件名') or ''}")
-        st.markdown(f"- 住所：{data.get('住所') or ''}")
-        st.markdown(f"- 窓口会社：{data.get('窓口会社') or ''}")
-
-    with st.expander("通報・受付情報", expanded=True):
-        st.markdown(f"- 受信時刻：{data.get('受信時刻') or ''}")
-        editable_field("通報者", "通報者", 1)
-        editable_field("受信内容", "受信内容", 4)
-
-    with st.expander("現着・作業・完了情報", expanded=True):
-        st.markdown(f"- 現着時刻：{data.get('現着時刻') or ''}")
-        st.markdown(f"- 完了時刻：{data.get('完了時刻') or ''}")
-        dur = data.get("作業時間_分")
-        if dur:
-            st.info(f"作業時間（概算）：{dur} 分")
-        editable_field("現着状況", "現着状況", 5)
-        editable_field("原因", "原因", 5)
-        editable_field("処置内容", "処置内容", 5)
-        editable_field("処理修理後（Step2入力値）", "処理修理後", 1)
-
-    with st.expander("技術情報", expanded=False):
-        st.markdown(f"- 制御方式：{data.get('制御方式') or ''}")
-        st.markdown(f"- 契約種別：{data.get('契約種別') or ''}")
-        st.markdown(f"- メーカー：{data.get('メーカー') or ''}")
-
-    with st.expander("その他", expanded=False):
-        st.markdown(f"- 所属：{data.get('所属') or ''}")
-        st.markdown(f"- 対応者：{data.get('対応者') or ''}")
-        st.markdown(f"- 送信者：{data.get('送信者') or ''}")
-        st.markdown(f"- 受付番号：{data.get('受付番号') or ''}")
-        st.markdown(f"- 受付URL：{data.get('受付URL') or ''}")
-        st.markdown(f"- 現着・完了登録URL：{data.get('現着完了登録URL') or ''}")
-        st.markdown(f"- 案件種別(件名)：{data.get('案件種別(件名)') or ''}")
-
-    st.divider()
-
-    # --- 元の命名規則を再利用 ---
-def build_filename(data: Dict[str, Optional[str]]) -> str:
-        base_day = None
-        for k in ["現着時刻", "完了時刻", "受信時刻"]:
-            dt = _try_parse_datetime(data.get(k))
-            if dt:
-                base_day = dt.strftime("%Y%m%d")
-                break
-        if base_day is None:
-            base_day = datetime.now(JST).strftime("%Y%m%d")
-
-        manageno = (data.get("管理番号") or "UNKNOWN").replace("/", "_")
-        bname = (data.get("物件名") or "").strip().replace("/", "_")
-        if bname:
-            return f"緊急出動報告書_{manageno}_{bname}_{base_day}.xlsm"
-        return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
-
-    # --- Excel出力 ---
-    try:
-        xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
-        fname = build_filename(data)
-        st.download_button(
-            "Excelを生成（.xlsm）",
-            data=xlsx_bytes,
-            file_name=fname,
-            mime="application/vnd.ms-excel.sheet.macroEnabled.12",
-            use_container_width=True,
-        )
-    except Exception as e:
-        st.error(f"テンプレートへの書き込みでエラーが発生しました: {e}")
-
-    # --- 戻る操作 ---
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Step2に戻る", use_container_width=True):
-            st.session_state.step = 2
-            st.rerun()
-    with c2:
-        if st.button("最初に戻る", use_container_width=True):
-            st.session_state.step = 1
-            st.session_state.extracted = None
-            st.session_state.affiliation = ""
-            st.rerun()
 
 else:
     st.warning("認証が必要です。Step1に戻ります。")
