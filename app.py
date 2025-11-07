@@ -321,7 +321,7 @@ def editable_field(label, key, max_lines=1):
             st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
 
     # --- 編集モード ---
-    else:
+else:
         st.markdown(f"✏️ **{label} 編集中**")
         value = data.get(key) or ""
 
