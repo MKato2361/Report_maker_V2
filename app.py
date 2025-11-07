@@ -228,7 +228,7 @@ return f”緊急出動報告書_{manageno}_{base_day}.xlsm”
 # ====== 編集フィールド共通関数 ======
 
 def editable_field(label, key, max_lines=1):
-“”“共通：左アイコン付きの編集UI”””
+“”“共通：編集可能なフィールド表示”””
 data = st.session_state.extracted
 edit_key = f”edit_{key}”
 
@@ -236,42 +236,84 @@ edit_key = f”edit_{key}”
 if edit_key not in st.session_state:
     st.session_state[edit_key] = False
 
-# 通常表示モード
 if not st.session_state[edit_key]:
+    # 表示モード
     value = data.get(key) or ""
-    lines = value.split("\n") if max_lines > 1 else [value]
-    display_text = "<br>".join(lines)
-    cols = st.columns([0.07, 0.93])
-    with cols[0]:
-        if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
+    
+    col1, col2, col3 = st.columns([0.85, 0.1, 0.05])
+    with col1:
+        if max_lines == 1:
+            st.text_input(label, value=value, disabled=True, key=f"display_{key}")
+        else:
+            st.text_area(label, value=value, height=max_lines * 30, disabled=True, key=f"display_{key}")
+    with col2:
+        if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集", use_container_width=True):
             st.session_state[edit_key] = True
             st.rerun()
-    with cols[1]:
-        st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
 else:
     # 編集モード
-    st.markdown(f"✏️ **{label} 編集中**")
     value = data.get(key) or ""
+    
+    st.markdown(f"**✏️ {label} を編集中**")
     if max_lines == 1:
-        new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
+        new_val = st.text_input(f"{label}", value=value, key=f"in_{key}", label_visibility="collapsed")
     else:
-        new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
-    c1, c2 = st.columns([0.3, 0.7])
-    with c1:
-        if st.button("💾 保存", key=f"save_{key}"):
+        new_val = st.text_area(f"{label}", value=value, height=max_lines * 30, key=f"ta_{key}", label_visibility="collapsed")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 保存", key=f"save_{key}", use_container_width=True):
             st.session_state.extracted[key] = new_val
             st.session_state[edit_key] = False
+            st.success(f"{label}を更新しました")
             st.rerun()
-    with c2:
-        if st.button("❌ キャンセル", key=f"cancel_{key}"):
+    with col2:
+        if st.button("❌ キャンセル", key=f"cancel_{key}", use_container_width=True):
             st.session_state[edit_key] = False
             st.rerun()
 ```
 
 # ====== Streamlit UI ======
 
-st.set_page_config(page_title=APP_TITLE, layout=“centered”)
-st.title(APP_TITLE)
+st.set_page_config(
+page_title=APP_TITLE,
+layout=“centered”,
+initial_sidebar_state=“collapsed”
+)
+
+# カスタムCSS
+
+st.markdown(”””
+
+<style>
+    .main > div {
+        padding-top: 2rem;
+    }
+    .stButton button {
+        font-weight: 500;
+    }
+    h1 {
+        padding-bottom: 1rem;
+        border-bottom: 3px solid #1f77b4;
+    }
+    h2 {
+        color: #1f77b4;
+        margin-top: 2rem;
+    }
+    .step-indicator {
+        text-align: center;
+        padding: 1rem;
+        background: linear-gradient(90deg, #e3f2fd 0%, #bbdefb 100%);
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+</style>
+
+“””, unsafe_allow_html=True)
+
+st.title(“📋 “ + APP_TITLE)
 
 # セッション状態の初期化
 
@@ -286,73 +328,123 @@ st.session_state.affiliation = “”
 if “processing_after” not in st.session_state:
 st.session_state.processing_after = “”
 
+# ステップインジケーター
+
+step_names = [“🔐 認証”, “📝 入力”, “✅ 確認・生成”]
+current_step = st.session_state.step
+progress_html = f”””
+
+<div class="step-indicator">
+    {"  →  ".join([f"<span style='color: {'#1f77b4' if i+1 == current_step else '#999'};'>{'<b>' if i+1 == current_step else ''}{step_names[i]}{'</b>' if i+1 == current_step else ''}</span>" for i in range(3)])}
+</div>
+"""
+st.markdown(progress_html, unsafe_allow_html=True)
+
 # Step 1: パスコード認証
 
 if st.session_state.step == 1:
-st.subheader(“Step 1. パスコード認証”)
-pw = st.text_input(“パスコードを入力してください”, type=“password”)
-if st.button(“次へ”):
-if pw == PASSCODE:
-st.session_state.authed = True
-st.session_state.step = 2
-st.rerun()
-else:
-st.error(“パスコードが違います。”)
+st.markdown(”### 🔐 Step 1. パスコード認証”)
+
+```
+with st.container():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        pw = st.text_input("パスコードを入力", type="password", placeholder="パスコードを入力してください")
+        
+        if st.button("🔓 ログイン", use_container_width=True, type="primary"):
+            if pw == PASSCODE:
+                st.session_state.authed = True
+                st.session_state.step = 2
+                st.rerun()
+            else:
+                st.error("⚠️ パスコードが正しくありません")
+```
 
 elif st.session_state.step == 2 and st.session_state.authed:
 # Step 2: メール本文＋テンプレ自動読み込み
-st.subheader(“Step 2. メール本文の貼り付け / 所属”)
+st.markdown(”### 📝 Step 2. メール本文の貼り付け”)
 
 ```
+# テンプレート読み込み
 template_path = "template.xlsm"
 if os.path.exists(template_path):
     with open(template_path, "rb") as f:
         st.session_state.template_xlsx_bytes = f.read()
-    st.success(f"テンプレートを読み込みました: {template_path}")
+    st.success(f"✅ テンプレートを読み込みました: `{template_path}`")
 else:
-    st.error(f"テンプレートファイルが見つかりません: {template_path}")
+    st.error(f"❌ テンプレートファイルが見つかりません: `{template_path}`")
     st.stop()
 
-aff = st.text_input("所属（例：札幌支店 / 本社 / 道央サービスなど）", value=st.session_state.affiliation)
-st.session_state.affiliation = aff
+# 入力フォーム
+with st.container():
+    col1, col2 = st.columns(2)
+    with col1:
+        aff = st.text_input("🏢 所属", value=st.session_state.affiliation, placeholder="例：札幌支店 / 本社")
+        st.session_state.affiliation = aff
+    with col2:
+        processing_after = st.text_input("🔧 処理修理後（任意）", value=st.session_state.processing_after, placeholder="任意項目")
+        st.session_state.processing_after = processing_after
 
-processing_after = st.text_input("処理修理後（任意）", value=st.session_state.processing_after)
-st.session_state.processing_after = processing_after
+text = st.text_area(
+    "📧 故障完了メール（本文）", 
+    height=300,
+    placeholder="メール本文をここに貼り付けてください...",
+    help="完了メールの本文をそのまま貼り付けてください"
+)
 
-text = st.text_area("故障完了メール（本文）を貼り付け", height=240)
+st.divider()
 
-c1, c2 = st.columns(2)
-with c1:
-    if st.button("抽出する", use_container_width=True):
+col1, col2, col3 = st.columns([2, 2, 1])
+with col1:
+    if st.button("🔍 抽出して次へ", use_container_width=True, type="primary"):
         if not text.strip():
-            st.warning("本文が空です。")
+            st.warning("⚠️ メール本文を入力してください")
         else:
-            st.session_state.extracted = extract_fields(text)
-            st.session_state.extracted["所属"] = st.session_state.affiliation
-            if st.session_state.processing_after:
-                st.session_state.extracted["処理修理後"] = st.session_state.processing_after
-            st.session_state.step = 3
+            with st.spinner("データを抽出中..."):
+                st.session_state.extracted = extract_fields(text)
+                st.session_state.extracted["所属"] = st.session_state.affiliation
+                if st.session_state.processing_after:
+                    st.session_state.extracted["処理修理後"] = st.session_state.processing_after
+                st.session_state.step = 3
             st.rerun()
-with c2:
-    if st.button("クリア", use_container_width=True):
+with col2:
+    if st.button("🗑️ クリア", use_container_width=True):
         st.session_state.extracted = None
         st.session_state.affiliation = ""
         st.session_state.processing_after = ""
+        st.rerun()
+with col3:
+    if st.button("⬅️ 戻る", use_container_width=True):
+        st.session_state.step = 1
+        st.rerun()
 ```
 
 elif st.session_state.step == 3 and st.session_state.authed:
 # Step 3: 抽出結果の確認・編集 → Excel生成
-st.subheader(“Step 3. 抽出結果の確認・編集 → Excel生成”)
+st.markdown(”### ✅ Step 3. 抽出結果の確認・編集”)
 
 ```
 data = st.session_state.extracted or {}
 
-# --- 編集項目ブロック ---
-with st.expander("通報・受付情報", expanded=True):
+# 基本情報サマリー（折りたたみ不可）
+with st.container():
+    st.markdown("#### 📊 基本情報")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("管理番号", data.get("管理番号") or "未取得")
+    with col2:
+        st.metric("物件名", data.get("物件名") or "未取得")
+    with col3:
+        st.metric("メーカー", data.get("メーカー") or "未取得")
+
+st.divider()
+
+# 編集可能フィールド
+with st.expander("📞 通報・受付情報", expanded=True):
     editable_field("通報者", "通報者", 1)
     editable_field("受信内容", "受信内容", 4)
 
-with st.expander("現着・作業・完了情報", expanded=True):
+with st.expander("🔧 現着・作業・完了情報", expanded=True):
     editable_field("現着状況", "現着状況", 5)
     editable_field("原因", "原因", 5)
     editable_field("処置内容", "処置内容", 5)
@@ -360,27 +452,35 @@ with st.expander("現着・作業・完了情報", expanded=True):
 
 st.divider()
 
-# --- Excel出力 ---
+# Excel生成
+st.markdown("#### 📥 Excel出力")
 try:
     xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
     fname = build_filename(data)
-    st.download_button(
-        "📥 Excelを生成（.xlsm）",
-        data=xlsx_bytes,
-        file_name=fname,
-        mime="application/vnd.ms-excel.sheet.macroEnabled.12",
-        use_container_width=True,
-    )
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.download_button(
+            "📥 Excel ファイルをダウンロード (.xlsm)",
+            data=xlsx_bytes,
+            file_name=fname,
+            mime="application/vnd.ms-excel.sheet.macroEnabled.12",
+            use_container_width=True,
+            type="primary"
+        )
+        st.caption(f"ファイル名: `{fname}`")
 except Exception as e:
-    st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
+    st.error(f"❌ エラーが発生しました: {e}")
 
-# --- 戻るボタン群 ---
-c1, c2 = st.columns(2)
-with c1:
+st.divider()
+
+# ナビゲーション
+col1, col2 = st.columns(2)
+with col1:
     if st.button("⬅️ Step2に戻る", use_container_width=True):
         st.session_state.step = 2
         st.rerun()
-with c2:
+with col2:
     if st.button("🔄 最初に戻る", use_container_width=True):
         st.session_state.step = 1
         st.session_state.extracted = None
@@ -391,6 +491,8 @@ with c2:
 
 else:
 # 認証なし状態
-st.warning(“認証が必要です。Step1に戻ります。”)
+st.warning(“⚠️ 認証が必要です”)
+if st.button(“🔐 ログイン画面へ”):
 st.session_state.step = 1
 st.session_state.authed = False
+st.rerun()
