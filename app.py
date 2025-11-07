@@ -352,6 +352,9 @@ elif st.session_state.step == 3 and st.session_state.authed:
         st.markdown(f"**現着時刻：** {data.get('現着時刻') or ''}")
         st.markdown(f"**完了時刻：** {data.get('完了時刻') or ''}")
         st.markdown(f"**作業時間（分）：** {data.get('作業時間_分') or ''}")
+        dur = data.get("作業時間_分")
+        if dur:
+            st.info(f"作業時間（概算）：{dur} 分")
         editable_field("現着状況", "現着状況", 5)
         editable_field("原因", "原因", 5)
         editable_field("処置内容", "処置内容", 5)
