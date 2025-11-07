@@ -299,7 +299,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     # --- 編集可能フィールド ---
 def editable_field(label, key, max_lines=1):
-    """共通：左アイコン付きの編集UI"""
+    """共通：左アイコン付きの編集UI（構文修正版）"""
     data = st.session_state.extracted
     edit_key = f"edit_{key}"
     if edit_key not in st.session_state:
@@ -311,7 +311,6 @@ def editable_field(label, key, max_lines=1):
         lines = value.split("\n") if max_lines > 1 else [value]
         display_text = "<br>".join(lines)
 
-        # アイコン＋項目名＋値を同じ行に表示
         cols = st.columns([0.07, 0.93])
         with cols[0]:
             if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
@@ -324,6 +323,7 @@ def editable_field(label, key, max_lines=1):
     else:
         st.markdown(f"✏️ **{label} 編集中**")
         value = data.get(key) or ""
+
         if max_lines == 1:
             new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
         else:
@@ -339,6 +339,7 @@ def editable_field(label, key, max_lines=1):
             if st.button("❌ キャンセル", key=f"cancel_{key}"):
                 st.session_state[edit_key] = False
                 st.rerun()
+
 
 
     # ====== 表示・編集セクション ======
