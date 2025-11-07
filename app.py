@@ -290,10 +290,15 @@ elif st.session_state.step == 2 and st.session_state.authed:
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
+    # Step2で入力した処理修理後を常に反映
+    if st.session_state.get("processing_after"):
+        if st.session_state.extracted is not None:
+            st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
+
     data = st.session_state.extracted or {}
 
+    # --- 編集可能フィールド ---
     def editable_field(label, key, max_lines=1):
-        """共通：編集可能項目（✏️ボタン→入力切替→保存）"""
         edit_key = f"edit_{key}"
         if edit_key not in st.session_state:
             st.session_state[edit_key] = False
@@ -317,39 +322,34 @@ elif st.session_state.step == 3 and st.session_state.authed:
                 st.session_state[edit_key] = False
                 st.rerun()
 
-    # ====== 基本情報 ======
+    # ====== 表示・編集セクション ======
     with st.expander("基本情報", expanded=True):
         st.markdown(f"- 管理番号：{data.get('管理番号') or ''}")
         st.markdown(f"- 物件名：{data.get('物件名') or ''}")
         st.markdown(f"- 住所：{data.get('住所') or ''}")
         st.markdown(f"- 窓口会社：{data.get('窓口会社') or ''}")
 
-    # ====== 通報・受付情報 ======
     with st.expander("通報・受付情報", expanded=True):
         st.markdown(f"- 受信時刻：{data.get('受信時刻') or ''}")
         editable_field("通報者", "通報者", 1)
         editable_field("受信内容", "受信内容", 4)
 
-    # ====== 現着・作業・完了情報 ======
     with st.expander("現着・作業・完了情報", expanded=True):
         st.markdown(f"- 現着時刻：{data.get('現着時刻') or ''}")
         st.markdown(f"- 完了時刻：{data.get('完了時刻') or ''}")
         dur = data.get("作業時間_分")
         if dur:
             st.info(f"作業時間（概算）：{dur} 分")
-
         editable_field("現着状況", "現着状況", 5)
         editable_field("原因", "原因", 5)
         editable_field("処置内容", "処置内容", 5)
         editable_field("処理修理後（Step2入力値）", "処理修理後", 1)
 
-    # ====== 技術情報 ======
     with st.expander("技術情報", expanded=False):
         st.markdown(f"- 制御方式：{data.get('制御方式') or ''}")
         st.markdown(f"- 契約種別：{data.get('契約種別') or ''}")
         st.markdown(f"- メーカー：{data.get('メーカー') or ''}")
 
-    # ====== その他 ======
     with st.expander("その他", expanded=False):
         st.markdown(f"- 所属：{data.get('所属') or ''}")
         st.markdown(f"- 対応者：{data.get('対応者') or ''}")
@@ -361,10 +361,27 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     st.divider()
 
-    # ====== Excel出力処理 ======
+    # --- 元の命名規則を再利用 ---
+    def build_filename(data: Dict[str, Optional[str]]) -> str:
+        base_day = None
+        for k in ["現着時刻", "完了時刻", "受信時刻"]:
+            dt = _try_parse_datetime(data.get(k))
+            if dt:
+                base_day = dt.strftime("%Y%m%d")
+                break
+        if base_day is None:
+            base_day = datetime.now(JST).strftime("%Y%m%d")
+
+        manageno = (data.get("管理番号") or "UNKNOWN").replace("/", "_")
+        bname = (data.get("物件名") or "").strip().replace("/", "_")
+        if bname:
+            return f"緊急出動報告書_{manageno}_{bname}_{base_day}.xlsm"
+        return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
+
+    # --- Excel出力 ---
     try:
         xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
-        fname = "緊急出動報告書_" + (data.get("管理番号") or "未設定") + ".xlsm"
+        fname = build_filename(data)
         st.download_button(
             "Excelを生成（.xlsm）",
             data=xlsx_bytes,
@@ -375,7 +392,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
     except Exception as e:
         st.error(f"テンプレートへの書き込みでエラーが発生しました: {e}")
 
-    # ====== 戻る操作 ======
+    # --- 戻る操作 ---
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Step2に戻る", use_container_width=True):
