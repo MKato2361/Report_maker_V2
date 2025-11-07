@@ -291,9 +291,14 @@ elif st.session_state.step == 2 and st.session_state.authed:
             st.session_state.extracted = None
             st.session_state.affiliation = ""
 
+
+
 # -------------------------------------------------------------
 # ✏️ 編集フィールド共通関数（Step3で利用）
 # -------------------------------------------------------------
+
+
+
 def editable_field(label, key, max_lines=1):
     """共通：左アイコン付きの編集UI"""
     data = st.session_state.extracted
