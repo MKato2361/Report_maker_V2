@@ -251,9 +251,9 @@ if st.session_state.step == 1:
             st.error("パスコードが違います。")
 
 # Step 2: メール本文＋テンプレ自動読み込み
+# Step2まで同じ
 elif st.session_state.step == 2 and st.session_state.authed:
     st.subheader("Step 2. メール本文の貼り付け / 所属")
-
     template_path = "template.xlsm"
     if os.path.exists(template_path):
         with open(template_path, "rb") as f:
@@ -263,19 +263,15 @@ elif st.session_state.step == 2 and st.session_state.authed:
         st.error(f"テンプレートファイルが見つかりません: {template_path}")
         st.stop()
 
-    # 所属入力
     aff = st.text_input("所属（例：札幌支店 / 本社 / 道央サービスなど）", value=st.session_state.affiliation)
     st.session_state.affiliation = aff
 
-    # Step2入力：処理修理後
     processing_after = st.text_input("処理修理後（任意）")
     if processing_after:
         st.session_state["processing_after"] = processing_after
 
-    # 故障メール本文
     text = st.text_area("故障完了メール（本文）を貼り付け", height=240)
 
-    # ボタン群
     c1, c2 = st.columns(2)
     with c1:
         if st.button("抽出する", use_container_width=True):
@@ -291,13 +287,12 @@ elif st.session_state.step == 2 and st.session_state.authed:
             st.session_state.extracted = None
             st.session_state.affiliation = ""
 
-
-
 # -------------------------------------------------------------
 # ✏️ 編集フィールド共通関数（Step3で利用）
 # -------------------------------------------------------------
-
-
+# ✅ ここでifブロックが完全に終わるように、1行以上の空行を必ず入れる！
+# （これがないとelifが同じifチェーン扱いになり構文エラーになる）
+# -------------------------------------------------------------
 
 def editable_field(label, key, max_lines=1):
     """共通：左アイコン付きの編集UI"""
@@ -306,12 +301,11 @@ def editable_field(label, key, max_lines=1):
     if edit_key not in st.session_state:
         st.session_state[edit_key] = False
 
-    # --- 通常表示モード ---
+    # 通常表示モード
     if not st.session_state[edit_key]:
         value = data.get(key) or ""
         lines = value.split("\n") if max_lines > 1 else [value]
         display_text = "<br>".join(lines)
-
         cols = st.columns([0.07, 0.93])
         with cols[0]:
             if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
@@ -320,16 +314,14 @@ def editable_field(label, key, max_lines=1):
         with cols[1]:
             st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
 
-    # --- 編集モード ---
+    # 編集モード
     else:
         st.markdown(f"✏️ **{label} 編集中**")
         value = data.get(key) or ""
-
         if max_lines == 1:
             new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
         else:
             new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
-
         c1, c2 = st.columns([0.3, 0.7])
         with c1:
             if st.button("💾 保存", key=f"save_{key}"):
@@ -341,11 +333,13 @@ def editable_field(label, key, max_lines=1):
                 st.session_state[edit_key] = False
                 st.rerun()
 
+
 # -------------------------------------------------------------
+# ✅ 空行がポイント！　これで elif が新しいトップレベル条件として認識されます
+# -------------------------------------------------------------
+
+
 # Step3: 抽出結果の確認・編集 → Excel生成
-# -------------------------------------------------------------
-
-
 
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
