@@ -285,7 +285,47 @@ elif st.session_state.step == 2 and st.session_state.authed:
         if st.button("クリア", use_container_width=True):
             st.session_state.extracted = None
             st.session_state.affiliation = ""
+def editable_field(label, key, max_lines=1):
+    """共通：左アイコン付きの編集UI"""
+    data = st.session_state.extracted
+    edit_key = f"edit_{key}"
+    if edit_key not in st.session_state:
+        st.session_state[edit_key] = False
 
+    # --- 通常表示モード ---
+    if not st.session_state[edit_key]:
+        value = data.get(key) or ""
+        lines = value.split("\n") if max_lines > 1 else [value]
+        display_text = "<br>".join(lines)
+
+        # アイコン＋項目名＋値を同じ行に表示
+        cols = st.columns([0.07, 0.93])
+        with cols[0]:
+            if st.button("✏️", key=f"btn_{key}", help=f"{label}を編集"):
+                st.session_state[edit_key] = True
+                st.rerun()
+        with cols[1]:
+            st.markdown(f"**{label}：**<br>{display_text}", unsafe_allow_html=True)
+
+    # --- 編集モード ---
+    else:
+        st.markdown(f"✏️ **{label} 編集中**")
+        value = data.get(key) or ""
+        if max_lines == 1:
+            new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
+        else:
+            new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
+
+        c1, c2 = st.columns([0.3, 0.7])
+        with c1:
+            if st.button("💾 保存", key=f"save_{key}"):
+                st.session_state.extracted[key] = new_val
+                st.session_state[edit_key] = False
+                st.rerun()
+        with c2:
+            if st.button("❌ キャンセル", key=f"cancel_{key}"):
+                st.session_state[edit_key] = False
+                st.rerun()
 
 # Step3: 抽出結果の確認・編集 → Excel生成
 elif st.session_state.step == 3 and st.session_state.authed:
@@ -298,30 +338,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     data = st.session_state.extracted or {}
 
-    # --- 編集可能フィールド ---
-    def editable_field(label, key, max_lines=1):
-        edit_key = f"edit_{key}"
-        if edit_key not in st.session_state:
-            st.session_state[edit_key] = False
 
-        if not st.session_state[edit_key]:
-            value = data.get(key) or ""
-            lines = value.split("\n") if max_lines > 1 else [value]
-            st.markdown(f"**{label}：**<br>{'<br>'.join(lines)}", unsafe_allow_html=True)
-            if st.button(f"✏️ {label}を編集", key=f"btn_{key}"):
-                st.session_state[edit_key] = True
-                st.rerun()
-        else:
-            st.markdown(f"✏️ **{label} 編集中**")
-            value = data.get(key) or ""
-            if max_lines == 1:
-                new_val = st.text_input(f"{label}を入力", value=value, key=f"in_{key}")
-            else:
-                new_val = st.text_area(f"{label}を入力", value=value, height=max_lines * 25, key=f"ta_{key}")
-            if st.button(f"💾 {label}を保存", key=f"save_{key}"):
-                st.session_state.extracted[key] = new_val
-                st.session_state[edit_key] = False
-                st.rerun()
 
     # ====== 表示・編集セクション ======
     with st.expander("基本情報", expanded=True):
