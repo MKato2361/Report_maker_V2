@@ -318,9 +318,6 @@ elif st.session_state.step == 2 and st.session_state.authed:
 # -------------------------------------------------------------
 # Step3: 抽出結果の確認・編集 → Excel生成
 # -------------------------------------------------------------
-elif st.session_state.step == 3 and st.session_state.authed:
-    st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
-
     # Step2で入力した処理修理後を常に反映
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
