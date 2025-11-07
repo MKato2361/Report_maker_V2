@@ -322,11 +322,17 @@ elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
     # Step2で入力した処理修理後を常に反映
-    if st.session_state.get("processing_after"):
-        if st.session_state.extracted is not None:
+elif st.session_state.step == 3 and st.session_state.authed:
+    st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
+
+    # --- Step2の処理修理後を初回のみ反映 ---
+    if st.session_state.get("processing_after") and st.session_state.extracted is not None:
+        if not st.session_state.extracted.get("_processing_after_initialized"):
             st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
+            st.session_state.extracted["_processing_after_initialized"] = True
 
     data = st.session_state.extracted or {}
+
 
     # -------------------------------------------------------------
     # ① 基本情報（表示のみ）
