@@ -299,7 +299,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     # --- 編集可能フィールド ---
 def editable_field(label, key, max_lines=1):
-    """共通：左アイコン付きの編集UI（構文修正版）"""
+    """共通：左アイコン付きの編集UI（構文完全修正版）"""
     data = st.session_state.extracted
     edit_key = f"edit_{key}"
     if edit_key not in st.session_state:
@@ -339,8 +339,6 @@ def editable_field(label, key, max_lines=1):
             if st.button("❌ キャンセル", key=f"cancel_{key}"):
                 st.session_state[edit_key] = False
                 st.rerun()
-
-
 
     # ====== 表示・編集セクション ======
     with st.expander("基本情報", expanded=True):
