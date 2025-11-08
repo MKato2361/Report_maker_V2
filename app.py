@@ -28,6 +28,29 @@ PASSCODE = st.secrets.get("APP_PASSCODE", PASSCODE_DEFAULT)
 SHEET_NAME = "緊急出動報告書（リンク付き）"
 WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]
 
+# ページ設定（最優先）
+st.set_page_config(
+    page_title="故障報告Excel自動生成",
+    page_icon="🔧",
+    layout="centered"
+)
+
+# PWAヘッダー注入
+from components.pwa_header import inject_pwa_header
+inject_pwa_header()
+
+# タイトル非表示＋上部余白を最小化
+st.markdown(
+    """
+    <style>
+    header {visibility: hidden;}
+    .block-container {padding-top: 0rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # -------------------------------------------------------------
 # ✏️ 編集フィールド共通関数（どのStepでも利用可能）
 # -------------------------------------------------------------
