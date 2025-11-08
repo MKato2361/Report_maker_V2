@@ -17,29 +17,6 @@ from typing import Dict, Optional, Tuple, List
 import os
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
-
-# ページ設定（最優先）
-st.set_page_config(
-    page_title="故障報告Excel自動生成",
-    page_icon="🔧",
-    layout="centered"
-)
-
-# PWAヘッダー注入
-from components.pwa_header import inject_pwa_header
-inject_pwa_header()
-
-# タイトル非表示＋上部余白を最小化
-st.markdown(
-    """
-    <style>
-    header {visibility: hidden;}
-    .block-container {padding-top: 0rem;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 import streamlit as st
 
 JST = timezone(timedelta(hours=9))
