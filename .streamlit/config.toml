@@ -1,5 +1,4 @@
-[server]
-enableStaticServing = true
-
-[browser]
-gatherUsageStats = false
+[global]
+# index.htmlの配置場所を指定
+# プロジェクトルートに index.html を配置している場合
+custom_html = "index.html"
