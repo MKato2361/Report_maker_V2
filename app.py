@@ -7,6 +7,29 @@
 # 3ステップUI / パスコード認証 / 編集可能 / 折りたたみ表示（時系列）
 
 # ————————————————————
+import streamlit as st
+from components.pwa_header import inject_pwa_header
+
+# ページ設定
+st.set_page_config(
+    page_title="故障報告Excel自動生成",
+    page_icon="🔧",
+    layout="centered"
+)
+
+# PWAヘッダー注入
+inject_pwa_header()
+
+# タイトル非表示＋上部余白を最小化
+st.markdown(
+    """
+    <style>
+    header {visibility: hidden;}
+    .block-container {padding-top: 0rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 import io
 import re
