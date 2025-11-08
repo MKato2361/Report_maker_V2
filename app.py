@@ -6,17 +6,11 @@
 
 # 3ステップUI / パスコード認証 / 編集可能 / 折りたたみ表示（時系列）
 
+# ————————————————————
 import streamlit as st
-import io
-import re
-import unicodedata
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple, List
-import os
-from openpyxl import load_workbook
-from openpyxl.drawing.image import Image as XLImage
+from components.pwa_header import inject_pwa_header
 
-# ページ設定（最優先）
+# ページ設定
 st.set_page_config(
     page_title="故障報告Excel自動生成",
     page_icon="🔧",
@@ -24,7 +18,6 @@ st.set_page_config(
 )
 
 # PWAヘッダー注入
-from components.pwa_header import inject_pwa_header
 inject_pwa_header()
 
 # タイトル非表示＋上部余白を最小化
@@ -38,40 +31,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 定数定義
+import io
+import re
+import unicodedata
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional, Tuple, List
+import os
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as XLImage
+import streamlit as st
+
 JST = timezone(timedelta(hours=9))
-APP_TITLE = "故障報告メール → Excel自動生成（マクロ対応）"
-PASSCODE_DEFAULT = "1357"
 
+APP_TITLE = “故障報告メール → Excel自動生成（マクロ対応）”
+PASSCODE_DEFAULT = “1357”
 try:
-    PASSCODE = st.secrets.get("APP_PASSCODE", PASSCODE_DEFAULT)
+PASSCODE = st.secrets.get(“APP_PASSCODE”, PASSCODE_DEFAULT)
 except:
-    PASSCODE = PASSCODE_DEFAULT
+PASSCODE = PASSCODE_DEFAULT
 
-SHEET_NAME = "緊急出動報告書（リンク付き）"
-WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]
+SHEET_NAME = “緊急出動報告書（リンク付き）”
+WEEKDAYS_JA = [“月”, “火”, “水”, “木”, “金”, “土”, “日”]
 
 # ====== テキスト整形・抽出ユーティリティ ======
+
 def normalize_text(text: str) -> str:
-    if not text:
-        return ""
-    t = unicodedata.normalize("NFKC", text)
-    t = t.replace("：", ":")
-    t = t.replace("\t", " ").replace("\r\n", "\n").replace("\r", "\n")
-    return t
+if not text:
+return “”
+t = unicodedata.normalize(“NFKC”, text)
+t = t.replace(”：”, “:”)
+t = t.replace(”\t”, “ “).replace(”\r\n”, “\n”).replace(”\r”, “\n”)
+return t
 
 def _search_one(pattern: str, text: str, flags=0) -> Optional[str]:
-    m = re.search(pattern, text, flags)
-    return m.group(1).strip() if m else None
+m = re.search(pattern, text, flags)
+return m.group(1).strip() if m else None
 
 def _search_span_between(labels: Dict[str, str], key: str, text: str) -> Optional[str]:
-    lab = labels[key]
-    others = [v for k, v in labels.items() if k != key]
-    boundary = "|".join([f"(?:{v})" for v in others]) if others else r"$"
-    pattern = rf"{lab}\s*(.+?)(?=\n(?:{boundary})|\Z)"
-    m = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
-    return m.group(1).strip() if m else None
-    
+lab = labels[key]
+others = [v for k, v in labels.items() if k != key]
+boundary = “|”.join([f”(?:{v})” for v in others]) if others else r”$”
+pattern = rf”{lab}\s*(.+?)(?=\n(?:{boundary})|\Z)”
+m = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+return m.group(1).strip() if m else None
+
 def _try_parse_datetime(s: Optional[str]) -> Optional[datetime]:
 if not s:
 return None
