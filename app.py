@@ -18,30 +18,7 @@ import os
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
 import streamlit as st
-# ============================================================
-# PWA対応（ページ設定とヘッダー注入）
-# ============================================================
-st.set_page_config(
-    page_title="故障報告Excel自動生成",
-    page_icon="🔧",
-    layout="centered"
-)
 
-# PWAヘッダー注入
-from components.pwa_header import inject_pwa_header
-inject_pwa_header()
-
-# タイトル非表示＋上部余白を最小化
-st.markdown(
-    """
-    <style>
-    header {visibility: hidden;}
-    .block-container {padding-top: 0rem;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-# ============================================================
 JST = timezone(timedelta(hours=9))
 
 APP_TITLE = "故障報告メール → Excel自動生成（マクロ対応）"
@@ -275,6 +252,19 @@ def build_filename(data: Dict[str, Optional[str]]) -> str:
         return f"緊急出動報告書_{manageno}_{bname}_{base_day}.xlsm"
     return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
 
+# ====== Streamlit UI ======
+st.set_page_config(page_title=APP_TITLE, layout="centered")
+#st.title(APP_TITLE)
+# タイトル非表示＋上部余白を最小化
+st.markdown(
+    """
+    <style>
+    header {visibility: hidden;}
+    .block-container {padding-top: 0rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 if "step" not in st.session_state:
     st.session_state.step = 1
