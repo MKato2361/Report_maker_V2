@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple, List
 import os
 import sys
 import traceback
+import copy  # ← 追加
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage  # 画像機能は将来用
 import streamlit as st
@@ -47,10 +48,93 @@ SHEET_NAME = "緊急出動報告書（リンク付き）"
 WEEKDAYS_JA = ["月", "火", "水", "木", "金", "土", "日"]
 
 # -------------------------------------------------------------
-# ✏️ 編集フィールド共通関数（どのStepでも利用可能）
+# ✏️ 編集フィールド共通関数（どのStepでも利用可能）＋一括編集UI
 # -------------------------------------------------------------
+def _ensure_extracted():
+    if "extracted" not in st.session_state or st.session_state.extracted is None:
+        st.session_state.extracted = {}
+
+def _enter_edit_mode():
+    _ensure_extracted()
+    st.session_state.edit_mode = True
+    st.session_state.edit_buffer = copy.deepcopy(st.session_state.extracted)
+
+def _cancel_edit():
+    st.session_state.edit_mode = False
+    st.session_state.edit_buffer = {}
+
+def _save_edit():
+    st.session_state.extracted = copy.deepcopy(st.session_state.edit_buffer)
+    st.session_state.edit_mode = False
+    st.session_state.edit_buffer = {}
+
+def _get_working_dict() -> dict:
+    """編集中はedit_buffer、それ以外はextractedを参照"""
+    if st.session_state.get("edit_mode"):
+        return st.session_state.edit_buffer
+    return st.session_state.extracted or {}
+
+def _set_working_value(key: str, value: str):
+    if st.session_state.get("edit_mode"):
+        st.session_state.edit_buffer[key] = value
+    else:
+        # ポップオーバーから直接反映するケース
+        _ensure_extracted()
+        st.session_state.extracted[key] = value
+
+# 必須項目（空なら赤ドットで強調）
+REQUIRED_KEYS = ["管理番号", "物件名"]
+
+def _is_required_missing(data: dict, key: str) -> bool:
+    return key in REQUIRED_KEYS and not (data.get(key) or "").strip()
+
+def _display_text(value: str, max_lines: int):
+    if not value:
+        return "—"
+    if max_lines and max_lines > 1:
+        lines = _split_lines(value, max_lines=max_lines)
+        return "<br>".join(lines)
+    return value.replace("\n", "<br>")
+
+# 項目レンダラ：一括編集モードとポップオーバー編集の両対応
+def render_field(label: str, key: str, max_lines: int = 1, placeholder: str = ""):
+    data = _get_working_dict()
+    val = data.get(key) or ""
+    missing = _is_required_missing(data, key)
+
+    cols = st.columns([0.2, 0.7, 0.1])
+    with cols[0]:
+        if missing:
+            st.markdown(f"🔴 **{label}**")
+        else:
+            st.markdown(f"**{label}**")
+
+    with cols[1]:
+        if st.session_state.get("edit_mode"):
+            # 一括編集モード：入力欄を直接出す
+            if max_lines == 1:
+                new_val = st.text_input("", value=val, placeholder=placeholder, key=f"in_{key}")
+            else:
+                new_val = st.text_area("", value=val, placeholder=placeholder, height=max(80, max_lines * 24), key=f"ta_{key}")
+            _set_working_value(key, new_val)
+        else:
+            # 通常表示：整形して表示
+            st.markdown(_display_text(val, max_lines=max_lines), unsafe_allow_html=True)
+
+    with cols[2]:
+        # ✏️クイック編集（ポップオーバー）
+        with st.popover("✏️"):
+            st.caption(f"{label} を編集")
+            if max_lines == 1:
+                pv = st.text_input(label, value=val, key=f"pop_{key}")
+            else:
+                pv = st.text_area(label, value=val, height=max(80, max_lines * 24), key=f"pop_{key}")
+            if st.button("反映", key=f"apply_{key}"):
+                _set_working_value(key, pv)
+                st.toast(f"{label} を更新しました")
+
 def editable_field(label, key, max_lines=1):
-    """共通：左アイコン付きの編集UI（セッション未初期化でも安全にアクセス）"""
+    """（従来版）左アイコン付きの編集UI – 互換維持のため残置"""
     if "extracted" not in st.session_state or st.session_state.extracted is None:
         st.session_state.extracted = {}
     data = st.session_state.extracted
@@ -125,7 +209,6 @@ def _try_parse_datetime(s: Optional[str]) -> Optional[datetime]:
             return dt.replace(tzinfo=JST)
         except Exception:
             pass
-    # pandas非依存で完結させるため、ここではこれ以上無理にパースしない
     return None
 
 def _split_dt_components(dt: Optional[datetime]) -> Tuple[Optional[int], Optional[int], Optional[int], Optional[str], Optional[int], Optional[int]]:
@@ -313,12 +396,35 @@ def build_filename(data: Dict[str, Optional[str]]) -> str:
 
 # ====== Streamlit UI ======
 st.set_page_config(page_title=APP_TITLE, layout="centered")
-# タイトル非表示＋上部余白を最小化
+# タイトル非表示＋上部余白を最小化＋編集ツールバーCSS
 st.markdown(
     """
     <style>
     header {visibility: hidden;}
     .block-container {padding-top: 0rem;}
+
+    /* 上部ツールバー（Step3のみ表示） */
+    .edit-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: blur(6px);
+        background: rgba(30,30,30,0.08);
+        padding: .5rem .75rem;
+        border-radius: .5rem;
+        margin-bottom: .5rem;
+    }
+    .edit-toolbar .btn-row {
+        display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+    }
+    .edit-badge {
+        font-size: .85rem;
+        background: #ffd24d;
+        color: #4a3b00;
+        padding: .15rem .5rem;
+        border-radius: .5rem;
+        margin-left: .25rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -415,69 +521,118 @@ elif st.session_state.step == 2 and st.session_state.authed:
             st.session_state.processing_after = ""
             st.rerun()
 
-# Step3: 抽出確認→Excel生成
+# Step3: 抽出確認→Excel生成（改良編集UI）
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
-    # Step2の処理修理後を初回のみ反映
+    # 初回：Step2の「処理修理後」反映
     if st.session_state.get("processing_after") and st.session_state.extracted is not None:
         if not st.session_state.extracted.get("_processing_after_initialized"):
             st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
             st.session_state.extracted["_processing_after_initialized"] = True
 
-    data = st.session_state.extracted or {}
+    # 編集モード状態の初期化
+    if "edit_mode" not in st.session_state:
+        st.session_state.edit_mode = False
+    if "edit_buffer" not in st.session_state:
+        st.session_state.edit_buffer = {}
+
+    # ツールバー（固定表示）
+    st.markdown('<div class="edit-toolbar">', unsafe_allow_html=True)
+    tb1, tb2, tb3, tb4 = st.columns([0.22, 0.22, 0.22, 0.34])
+    with tb1:
+        if not st.session_state.edit_mode:
+            if st.button("✏️ 一括編集モードに入る", use_container_width=True):
+                _enter_edit_mode()
+                st.rerun()
+        else:
+            if st.button("✅ すべて保存", type="primary", use_container_width=True):
+                _save_edit()
+                st.success("保存しました")
+                st.rerun()
+    with tb2:
+        if st.session_state.edit_mode:
+            if st.button("↩️ 変更を破棄", use_container_width=True):
+                _cancel_edit()
+                st.info("変更を破棄しました")
+                st.rerun()
+        else:
+            st.write("")
+    with tb3:
+        # 不足チェック（管理番号・物件名）
+        working = _get_working_dict()
+        miss = [k for k in REQUIRED_KEYS if _is_required_missing(working, k)]
+        if miss:
+            st.warning("必須: " + "・".join(miss))
+        else:
+            st.info("必須は入力済み")
+    with tb4:
+        mode = "ON" if st.session_state.edit_mode else "OFF"
+        st.markdown(
+            f"**編集モード:** {mode} " + ("" if not st.session_state.edit_mode else '<span class="edit-badge">一括編集中</span>'),
+            unsafe_allow_html=True
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 作業対象データ
+    data = _get_working_dict()
 
     # ① 基本情報
     with st.expander("① 基本情報", expanded=True):
-        base_fields = ["管理番号", "物件名", "住所", "窓口会社"]
-        for key in base_fields:
-            val = data.get(key) or ""
-            st.markdown(f"**{key}：** {val}")
+        render_field("管理番号", "管理番号", 1, placeholder="HK-000 など")
+        render_field("物件名", "物件名", 1)
+        render_field("住所", "住所", 2)
+        render_field("窓口会社", "窓口会社", 1)
 
     # ② 通報・受付情報
     with st.expander("② 通報・受付情報", expanded=True):
-        st.markdown(f"**受信時刻：** {data.get('受信時刻') or ''}")
-        editable_field("通報者", "通報者", 1)
-        editable_field("受信内容", "受信内容", 4)
+        render_field("受信時刻", "受信時刻", 1, placeholder="2025/11/10 09:30 など")
+        render_field("通報者", "通報者", 2)
+        render_field("受信内容", "受信内容", 6)
 
     # ③ 現着・作業・完了情報
     with st.expander("③ 現着・作業・完了情報", expanded=True):
-        st.markdown(f"**現着時刻：** {data.get('現着時刻') or ''}")
-        st.markdown(f"**完了時刻：** {data.get('完了時刻') or ''}")
-        dur = data.get("作業時間_分")
-        if dur:
+        render_field("現着時刻", "現着時刻", 1, placeholder="2025/11/10 10:05")
+        render_field("完了時刻", "完了時刻", 1, placeholder="2025/11/10 11:20")
+        # 概算時間（自動表示）
+        dur = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
+        if dur is not None and dur >= 0:
             st.info(f"作業時間（概算）：{dur} 分")
-        editable_field("現着状況", "現着状況", 5)
-        editable_field("原因", "原因", 5)
-        editable_field("処置内容", "処置内容", 5)
-        editable_field("処理修理後（Step2入力値）", "処理修理後", 1)
+        render_field("現着状況", "現着状況", 6)
+        render_field("原因", "原因", 6)
+        render_field("処置内容", "処置内容", 6)
+        render_field("処理修理後（Step2入力値）", "処理修理後", 2)
 
     # ④ 技術情報
     with st.expander("④ 技術情報", expanded=False):
-        tech_fields = ["制御方式", "契約種別", "メーカー"]
-        for key in tech_fields:
-            val = data.get(key) or ""
-            st.markdown(f"**{key}：** {val}")
+        render_field("制御方式", "制御方式", 1)
+        render_field("契約種別", "契約種別", 1)
+        render_field("メーカー", "メーカー", 1)
 
     # ⑤ その他情報
     with st.expander("⑤ その他情報", expanded=False):
-        other_fields = ["所属", "対応者", "送信者", "受付番号", "受付URL", "現着完了登録URL"]
-        for key in other_fields:
-            val = data.get(key) or ""
-            st.markdown(f"**{key}：** {val}")
+        render_field("所属", "所属", 1)
+        render_field("対応者", "対応者", 1)
+        render_field("送信者", "送信者", 1)
+        render_field("受付番号", "受付番号", 1)
+        render_field("受付URL", "受付URL", 1)
+        render_field("現着完了登録URL", "現着完了登録URL", 1)
 
     st.divider()
 
-    # --- Excel出力 ---
+    # --- Excel出力（編集モードでもプレビュー用に出せます） ---
     try:
-        xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, data)
-        fname = build_filename(data)
+        gen_data = _get_working_dict()
+        xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, gen_data)
+        fname = build_filename(gen_data)
         st.download_button(
             "Excelを生成（.xlsm）",
             data=xlsx_bytes,
             file_name=fname,
             mime="application/vnd.ms-excel.sheet.macroEnabled.12",
             use_container_width=True,
+            disabled=bool([k for k in REQUIRED_KEYS if _is_required_missing(gen_data, k)]),
+            help="必須項目の未入力がある場合は生成できません",
         )
     except Exception as e:
         st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
@@ -496,6 +651,8 @@ elif st.session_state.step == 3 and st.session_state.authed:
             st.session_state.extracted = None
             st.session_state.affiliation = ""
             st.session_state.processing_after = ""
+            st.session_state.edit_mode = False
+            st.session_state.edit_buffer = {}
             st.rerun()
 
 # 認証未完了時のフォールバック
