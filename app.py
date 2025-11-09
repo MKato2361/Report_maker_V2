@@ -254,7 +254,7 @@ def build_filename(data: Dict[str, Optional[str]]) -> str:
     return f"緊急出動報告書_{manageno}_{base_day}.xlsm"
 
 # ====== Streamlit UI ======
-st.set_page_config(page_title=APP_TITLE, layout="centered", favicon="icon.png")
+st.set_page_config(page_title=APP_TITLE, layout="centered")
 #st.title(APP_TITLE)
 # タイトル非表示＋上部余白を最小化
 st.markdown(
