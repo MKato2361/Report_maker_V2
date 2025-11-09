@@ -624,23 +624,43 @@ elif st.session_state.step == 3 and st.session_state.authed:
 
     st.divider()
 
-    # --- Excel出力 ---
+    # --- Excel出力（編集モード中は不可） ---
     try:
+        is_editing = st.session_state.get("edit_mode", False)
         gen_data = _get_working_dict()
         missing_now = [k for k in REQUIRED_KEYS if _is_required_missing(gen_data, k)]
-        xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, gen_data)
-        fname = build_filename(gen_data)
-        st.download_button(
-            "Excelを生成（.xlsm）",
-            data=xlsx_bytes,
-            file_name=fname,
-            mime="application/vnd.ms-excel.sheet.macroEnabled.12",
-            use_container_width=True,
-            disabled=bool(missing_now),
-            help="必須項目の未入力がある場合は生成できません",
-        )
-        if missing_now:
-            st.error("未入力の必須項目があります： " + "・".join(missing_now))
+
+        # 生成可能条件：編集モードOFF かつ 必須未入力なし
+        can_generate = (not is_editing) and (not missing_now)
+
+        if can_generate:
+            xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, gen_data)
+            fname = build_filename(gen_data)
+            st.download_button(
+                "Excelを生成（.xlsm）",
+                data=xlsx_bytes,
+                file_name=fname,
+                mime="application/vnd.ms-excel.sheet.macroEnabled.12",
+                use_container_width=True,
+                disabled=False,
+                help="一括編集モードはオフ、かつ必須項目がすべて入力されている場合に生成できます",
+            )
+        else:
+            # Streamlitの仕様で disabled でも data は必須。ダミーの空バイトを渡す
+            st.download_button(
+                "Excelを生成（.xlsm）",
+                data=b"",
+                file_name="未生成.xlsm",
+                mime="application/vnd.ms-excel.sheet.macroEnabled.12",
+                use_container_width=True,
+                disabled=True,
+                help="一括編集モード中は保存後に生成できます。必須未入力がある場合も生成できません。",
+            )
+            if is_editing:
+                st.warning("一括編集中は生成できません。「✅ すべて保存」を押して編集を確定してください。")
+            if missing_now:
+                st.error("未入力の必須項目があります： " + "・".join(missing_now))
+
     except Exception as e:
         st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
         with st.expander("詳細（開発者向け）"):
