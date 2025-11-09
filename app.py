@@ -78,7 +78,6 @@ def _set_working_value(key: str, value: str):
     if st.session_state.get("edit_mode"):
         st.session_state.edit_buffer[key] = value
     else:
-        # ポップオーバーから直接反映するケース
         _ensure_extracted()
         st.session_state.extracted[key] = value
 
@@ -96,13 +95,14 @@ def _display_text(value: str, max_lines: int):
         return "<br>".join(lines)
     return value.replace("\n", "<br>")
 
-# 項目レンダラ：一括編集モードとポップオーバー編集の両対応
-def render_field(label: str, key: str, max_lines: int = 1, placeholder: str = ""):
+# --- ポップオーバー編集は廃止 ---
+# 「一括編集モード時のみ、最初の編集セクション（＝基本情報）だけ編集可」にするレンダラ
+def render_field(label: str, key: str, max_lines: int = 1, placeholder: str = "", editable_in_bulk: bool = False):
     data = _get_working_dict()
     val = data.get(key) or ""
     missing = _is_required_missing(data, key)
 
-    cols = st.columns([0.2, 0.7, 0.1])
+    cols = st.columns([0.22, 0.78])
     with cols[0]:
         if missing:
             st.markdown(f"🔴 **{label}**")
@@ -110,31 +110,19 @@ def render_field(label: str, key: str, max_lines: int = 1, placeholder: str = ""
             st.markdown(f"**{label}**")
 
     with cols[1]:
-        if st.session_state.get("edit_mode"):
-            # 一括編集モード：入力欄を直接出す
+        if st.session_state.get("edit_mode") and editable_in_bulk:
+            # 一括編集モード時のみ入力欄を出す（基本情報のみ想定）
             if max_lines == 1:
                 new_val = st.text_input("", value=val, placeholder=placeholder, key=f"in_{key}")
             else:
                 new_val = st.text_area("", value=val, placeholder=placeholder, height=max(80, max_lines * 24), key=f"ta_{key}")
             _set_working_value(key, new_val)
         else:
-            # 通常表示：整形して表示
             st.markdown(_display_text(val, max_lines=max_lines), unsafe_allow_html=True)
 
-    with cols[2]:
-        # ✏️クイック編集（ポップオーバー）
-        with st.popover("✏️"):
-            st.caption(f"{label} を編集")
-            if max_lines == 1:
-                pv = st.text_input(label, value=val, key=f"pop_{key}")
-            else:
-                pv = st.text_area(label, value=val, height=max(80, max_lines * 24), key=f"pop_{key}")
-            if st.button("反映", key=f"apply_{key}"):
-                _set_working_value(key, pv)
-                st.toast(f"{label} を更新しました")
-
+# 互換のため残置（未使用）
 def editable_field(label, key, max_lines=1):
-    """（従来版）左アイコン付きの編集UI – 互換維持のため残置"""
+    """（従来版）左アイコン付きの編集UI – 互換維持のため残置（現在Step3では未使用）"""
     if "extracted" not in st.session_state or st.session_state.extracted is None:
         st.session_state.extracted = {}
     data = st.session_state.extracted
@@ -569,7 +557,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
     with tb4:
         mode = "ON" if st.session_state.edit_mode else "OFF"
         st.markdown(
-            f"**編集モード:** {mode} " + ("" if not st.session_state.edit_mode else '<span class="edit-badge">一括編集中</span>'),
+            f"**編集モード:** {mode} " + ("" if not st.session_state.edit_mode else '<span class="edit-badge">一括編集中（基本情報のみ編集可）</span>'),
             unsafe_allow_html=True
         )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -577,50 +565,47 @@ elif st.session_state.step == 3 and st.session_state.authed:
     # 作業対象データ
     data = _get_working_dict()
 
-    # ① 基本情報
-    with st.expander("① 基本情報", expanded=True):
-        render_field("管理番号", "管理番号", 1, placeholder="HK-000 など")
-        render_field("物件名", "物件名", 1)
-        render_field("住所", "住所", 2)
-        render_field("窓口会社", "窓口会社", 1)
+    # ① 基本情報（★一括編集対象）
+    with st.expander("① 基本情報（編集対象）", expanded=True):
+        # 技術情報をこちらに統合
+        render_field("管理番号", "管理番号", 1, placeholder="HK-000 など", editable_in_bulk=True)
+        render_field("物件名", "物件名", 1, editable_in_bulk=True)
+        render_field("住所", "住所", 2, editable_in_bulk=True)
+        render_field("窓口会社", "窓口会社", 1, editable_in_bulk=True)
+        render_field("制御方式", "制御方式", 1, editable_in_bulk=True)
+        render_field("契約種別", "契約種別", 1, editable_in_bulk=True)
+        render_field("メーカー", "メーカー", 1, editable_in_bulk=True)
 
-    # ② 通報・受付情報
+    # ② 通報・受付情報（表示のみ）
     with st.expander("② 通報・受付情報", expanded=True):
-        render_field("受信時刻", "受信時刻", 1, placeholder="2025/11/10 09:30 など")
-        render_field("通報者", "通報者", 2)
-        render_field("受信内容", "受信内容", 6)
+        render_field("受信時刻", "受信時刻", 1, placeholder="2025/11/10 09:30 など", editable_in_bulk=False)
+        render_field("通報者", "通報者", 2, editable_in_bulk=False)
+        render_field("受信内容", "受信内容", 6, editable_in_bulk=False)
 
-    # ③ 現着・作業・完了情報
+    # ③ 現着・作業・完了情報（表示のみ）
     with st.expander("③ 現着・作業・完了情報", expanded=True):
-        render_field("現着時刻", "現着時刻", 1, placeholder="2025/11/10 10:05")
-        render_field("完了時刻", "完了時刻", 1, placeholder="2025/11/10 11:20")
-        # 概算時間（自動表示）
+        render_field("現着時刻", "現着時刻", 1, placeholder="2025/11/10 10:05", editable_in_bulk=False)
+        render_field("完了時刻", "完了時刻", 1, placeholder="2025/11/10 11:20", editable_in_bulk=False)
         dur = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
         if dur is not None and dur >= 0:
             st.info(f"作業時間（概算）：{dur} 分")
-        render_field("現着状況", "現着状況", 6)
-        render_field("原因", "原因", 6)
-        render_field("処置内容", "処置内容", 6)
-        render_field("処理修理後（Step2入力値）", "処理修理後", 2)
+        render_field("現着状況", "現着状況", 6, editable_in_bulk=False)
+        render_field("原因", "原因", 6, editable_in_bulk=False)
+        render_field("処置内容", "処置内容", 6, editable_in_bulk=False)
+        render_field("処理修理後（Step2入力値）", "処理修理後", 2, editable_in_bulk=False)
 
-    # ④ 技術情報
-    with st.expander("④ 技術情報", expanded=False):
-        render_field("制御方式", "制御方式", 1)
-        render_field("契約種別", "契約種別", 1)
-        render_field("メーカー", "メーカー", 1)
-
-    # ⑤ その他情報
-    with st.expander("⑤ その他情報", expanded=False):
-        render_field("所属", "所属", 1)
-        render_field("対応者", "対応者", 1)
-        render_field("送信者", "送信者", 1)
-        render_field("受付番号", "受付番号", 1)
-        render_field("受付URL", "受付URL", 1)
-        render_field("現着完了登録URL", "現着完了登録URL", 1)
+    # ④ その他情報（表示のみ）
+    with st.expander("④ その他情報", expanded=False):
+        render_field("所属", "所属", 1, editable_in_bulk=False)
+        render_field("対応者", "対応者", 1, editable_in_bulk=False)
+        render_field("送信者", "送信者", 1, editable_in_bulk=False)
+        render_field("受付番号", "受付番号", 1, editable_in_bulk=False)
+        render_field("受付URL", "受付URL", 1, editable_in_bulk=False)
+        render_field("現着完了登録URL", "現着完了登録URL", 1, editable_in_bulk=False)
 
     st.divider()
 
-    # --- Excel出力（編集モードでもプレビュー用に出せます） ---
+    # --- Excel出力 ---
     try:
         gen_data = _get_working_dict()
         xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, gen_data)
