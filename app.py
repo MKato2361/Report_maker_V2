@@ -87,8 +87,9 @@ def _is_required_missing(data: dict, key: str) -> bool:
     return key in REQUIRED_KEYS and not (data.get(key) or "").strip()
 
 def _display_text(value: str, max_lines: int):
+    # ★空のときにダッシュを表示しない（空文字を返す）
     if not value:
-        return "—"
+        return ""
     if max_lines and max_lines > 1:
         lines = _split_lines(value, max_lines=max_lines)
         return "<br>".join(lines)
@@ -471,14 +472,13 @@ elif st.session_state.step == 2 and st.session_state.authed:
         st.error("テンプレートが未準備です。template.xlsm を配置するか、上でアップロードしてください。")
         st.stop()
 
-    # 所属
+    # 所属（常に現在値を表示・空なら空を保持できるようにする）
     aff = st.text_input("所属", value=st.session_state.affiliation)
     st.session_state.affiliation = aff
 
-    # 任意の補足（処理修理後）
-    processing_after = st.text_input("処理修理後（任意）")
-    if processing_after:
-        st.session_state["processing_after"] = processing_after
+    # 任意の補足（処理修理後）: ★空でも常に状態へ反映してクリア可能にする
+    processing_after = st.text_input("処理修理後（任意）", value=st.session_state.get("processing_after", ""))
+    st.session_state["processing_after"] = processing_after
 
     # 本文
     text = st.text_area("故障完了メール（本文）を貼り付け", height=240, placeholder="ここにメール本文を貼り付け...")
@@ -505,7 +505,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
     # 初回：Step2の「処理修理後」反映
-    if st.session_state.get("processing_after") and st.session_state.extracted is not None:
+    if st.session_state.get("processing_after") is not None and st.session_state.extracted is not None:
         if not st.session_state.extracted.get("_processing_after_initialized"):
             st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
             st.session_state.extracted["_processing_after_initialized"] = True
@@ -556,7 +556,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
     # 作業対象データ
     data = _get_working_dict()
 
-    # ① 編集対象（まとめて編集：ご指定の7項目のみ）
+    # ① 編集対象（まとめて編集）: 指定の7項目のみ編集可
     with st.expander("① 編集対象（まとめて編集）", expanded=True):
         render_field("通報者", "通報者", 1, editable_in_bulk=True)
         render_field("受信内容", "受信内容", 4, editable_in_bulk=True)
