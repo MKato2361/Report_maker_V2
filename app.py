@@ -611,13 +611,23 @@ elif st.session_state.step == 3 and st.session_state.authed:
         render_field("現着時刻", "現着時刻", 1, editable_in_bulk=False)
         render_field("完了時刻", "完了時刻", 1, editable_in_bulk=False)
 
-        t_recv_to_arrive = minutes_between(data.get("受信時刻"), data.get("現着時刻"))
-        t_work = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
-        t_recv_to_done = minutes_between(data.get("受信時刻"), data.get("完了時刻"))
+# （置き換え）③ 受付・現着・完了 の所の「所要時間表示」部分だけ
+t_recv_to_arrive = minutes_between(data.get("受信時刻"), data.get("現着時刻"))
+t_work = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
+t_recv_to_done = minutes_between(data.get("受信時刻"), data.get("完了時刻"))
 
-        def _fmt_minutes(v: Optional[int]) -> str:
-            return f"{v} 分" if (v is not None and v >= 0) else "—"
+def _fmt_minutes(v: Optional[int]) -> str:
+    return f"{v} 分" if (v is not None and v >= 0) else "—"
 
+# 元の色（Streamlit既定の info ブロック）で表示
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.info(f"受付〜現着時間: {_fmt_minutes(t_recv_to_arrive)}")
+with c2:
+    st.info(f"作業時間: {_fmt_minutes(t_work)}")
+with c3:
+    st.info(f"受付〜完了時間: {_fmt_minutes(t_recv_to_done)}")
+    
         st.markdown(
             f"""
             <div class="duration-box">
