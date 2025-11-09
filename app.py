@@ -422,18 +422,6 @@ st.markdown(
         color: #b00020;
         font-weight: 600;
     }
-    .duration-box {
-        border: 1px solid #ddd;
-        border-radius: .5rem;
-        padding: .6rem .8rem;
-        background: #fafafa;
-    }
-    .duration-row {
-        display:flex; gap:1rem; flex-wrap:wrap;
-    }
-    .duration-item {
-        margin-right: 1rem;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -605,41 +593,26 @@ elif st.session_state.step == 3 and st.session_state.authed:
         render_field("契約種別", "契約種別", 1, editable_in_bulk=False)
         render_field("メーカー", "メーカー", 1, editable_in_bulk=False)
 
-    # ③ 受付・現着・完了（表示）: 時刻と3つの差分時間
+    # ③ 受付・現着・完了（表示）: 時刻と3つの差分時間（元の色=st.info）
     with st.expander("③ 受付・現着・完了（表示）", expanded=True):
         render_field("受信時刻", "受信時刻", 1, editable_in_bulk=False)
         render_field("現着時刻", "現着時刻", 1, editable_in_bulk=False)
         render_field("完了時刻", "完了時刻", 1, editable_in_bulk=False)
 
-# （置き換え）③ 受付・現着・完了 の所の「所要時間表示」部分だけ
-t_recv_to_arrive = minutes_between(data.get("受信時刻"), data.get("現着時刻"))
-t_work = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
-t_recv_to_done = minutes_between(data.get("受信時刻"), data.get("完了時刻"))
+        t_recv_to_arrive = minutes_between(data.get("受信時刻"), data.get("現着時刻"))
+        t_work = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
+        t_recv_to_done = minutes_between(data.get("受信時刻"), data.get("完了時刻"))
 
-def _fmt_minutes(v: Optional[int]) -> str:
-    return f"{v} 分" if (v is not None and v >= 0) else "—"
+        def _fmt_minutes(v: Optional[int]) -> str:
+            return f"{v} 分" if (v is not None and v >= 0) else "—"
 
-# 元の色（Streamlit既定の info ブロック）で表示
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.info(f"受付〜現着時間: {_fmt_minutes(t_recv_to_arrive)}")
-with c2:
-    st.info(f"作業時間: {_fmt_minutes(t_work)}")
-with c3:
-    st.info(f"受付〜完了時間: {_fmt_minutes(t_recv_to_done)}")
-    
-        st.markdown(
-            f"""
-            <div class="duration-box">
-              <div class="duration-row">
-                <div class="duration-item"><b>受付〜現着時間:</b> {_fmt_minutes(t_recv_to_arrive)}</div>
-                <div class="duration-item"><b>作業時間:</b> {_fmt_minutes(t_work)}</div>
-                <div class="duration-item"><b>受付〜完了時間:</b> {_fmt_minutes(t_recv_to_done)}</div>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.info(f"受付〜現着時間: {_fmt_minutes(t_recv_to_arrive)}")
+        with c2:
+            st.info(f"作業時間: {_fmt_minutes(t_work)}")
+        with c3:
+            st.info(f"受付〜完了時間: {_fmt_minutes(t_recv_to_done)}")
 
     # ④ その他情報（表示のみ）
     with st.expander("④ その他情報（表示）", expanded=False):
