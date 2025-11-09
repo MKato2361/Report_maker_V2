@@ -80,14 +80,22 @@ def _set_working_value(key: str, value: str):
         _ensure_extracted()
         st.session_state.extracted[key] = value
 
-# 必須項目（空なら赤ドットで強調）
-REQUIRED_KEYS = ["管理番号", "物件名"]
+# ✅ 必須項目（編集可能項目=必須）
+REQUIRED_KEYS = [
+    "通報者",
+    "受信内容",
+    "現着状況",
+    "原因",
+    "処置内容",
+    "処理修理後",
+    "所属",
+]
 
 def _is_required_missing(data: dict, key: str) -> bool:
     return key in REQUIRED_KEYS and not (data.get(key) or "").strip()
 
 def _display_text(value: str, max_lines: int):
-    # ★空のときにダッシュを表示しない（空文字を返す）
+    # 空は空のまま（ダッシュ等は出さない）
     if not value:
         return ""
     if max_lines and max_lines > 1:
@@ -116,7 +124,11 @@ def render_field(label: str, key: str, max_lines: int = 1, placeholder: str = ""
                 new_val = st.text_area("", value=val, placeholder=placeholder, height=max(80, max_lines * 24), key=f"ta_{key}")
             _set_working_value(key, new_val)
         else:
-            st.markdown(_display_text(val, max_lines=max_lines), unsafe_allow_html=True)
+            # 表示時、必須で未入力なら「未入力」を明示
+            if missing:
+                st.markdown("<span class='missing'>未入力</span>", unsafe_allow_html=True)
+            else:
+                st.markdown(_display_text(val, max_lines=max_lines), unsafe_allow_html=True)
 
 # 互換のため残置（未使用）
 def editable_field(label, key, max_lines=1):
@@ -406,6 +418,22 @@ st.markdown(
         border-radius: .5rem;
         margin-left: .25rem;
     }
+    .missing {
+        color: #b00020;
+        font-weight: 600;
+    }
+    .duration-box {
+        border: 1px solid #ddd;
+        border-radius: .5rem;
+        padding: .6rem .8rem;
+        background: #fafafa;
+    }
+    .duration-row {
+        display:flex; gap:1rem; flex-wrap:wrap;
+    }
+    .duration-item {
+        margin-right: 1rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -472,11 +500,11 @@ elif st.session_state.step == 2 and st.session_state.authed:
         st.error("テンプレートが未準備です。template.xlsm を配置するか、上でアップロードしてください。")
         st.stop()
 
-    # 所属（常に現在値を表示・空なら空を保持できるようにする）
+    # 所属：空でも空を保持（ダッシュ等は付けない）
     aff = st.text_input("所属", value=st.session_state.affiliation)
     st.session_state.affiliation = aff
 
-    # 任意の補足（処理修理後）: ★空でも常に状態へ反映してクリア可能にする
+    # 任意の補足（処理修理後）：空でも常に状態へ反映してクリア可能にする
     processing_after = st.text_input("処理修理後（任意）", value=st.session_state.get("processing_after", ""))
     st.session_state["processing_after"] = processing_after
 
@@ -490,6 +518,7 @@ elif st.session_state.step == 2 and st.session_state.authed:
                 st.warning("本文が空です。")
             else:
                 st.session_state.extracted = extract_fields(text)
+                # Step2 入力値をそのまま反映（空は空のまま）
                 st.session_state.extracted["所属"] = st.session_state.affiliation
                 st.session_state.step = 3
                 st.rerun()
@@ -504,10 +533,10 @@ elif st.session_state.step == 2 and st.session_state.authed:
 elif st.session_state.step == 3 and st.session_state.authed:
     st.subheader("Step 3. 抽出結果の確認・編集 → Excel生成")
 
-    # 初回：Step2の「処理修理後」反映
-    if st.session_state.get("processing_after") is not None and st.session_state.extracted is not None:
+    # 初回：Step2の「処理修理後」反映（空文字も反映）
+    if "processing_after" in st.session_state and st.session_state.extracted is not None:
         if not st.session_state.extracted.get("_processing_after_initialized"):
-            st.session_state.extracted["処理修理後"] = st.session_state["processing_after"]
+            st.session_state.extracted["処理修理後"] = st.session_state.get("processing_after", "")
             st.session_state.extracted["_processing_after_initialized"] = True
 
     # 編集モード状態の初期化
@@ -538,11 +567,11 @@ elif st.session_state.step == 3 and st.session_state.authed:
         else:
             st.write("")
     with tb3:
-        # 不足チェック（管理番号・物件名）
+        # 不足チェック（編集可能=必須の全項目）
         working = _get_working_dict()
         miss = [k for k in REQUIRED_KEYS if _is_required_missing(working, k)]
         if miss:
-            st.warning("必須: " + "・".join(miss))
+            st.warning("必須未入力: " + "・".join(miss))
         else:
             st.info("必須は入力済み")
     with tb4:
@@ -556,8 +585,8 @@ elif st.session_state.step == 3 and st.session_state.authed:
     # 作業対象データ
     data = _get_working_dict()
 
-    # ① 編集対象（まとめて編集）: 指定の7項目のみ編集可
-    with st.expander("① 編集対象（まとめて編集）", expanded=True):
+    # ① 編集対象（まとめて編集）: 指定の7項目のみ編集可 & 必須
+    with st.expander("① 編集対象（まとめて編集・すべて必須）", expanded=True):
         render_field("通報者", "通報者", 1, editable_in_bulk=True)
         render_field("受信内容", "受信内容", 4, editable_in_bulk=True)
         render_field("現着状況", "現着状況", 5, editable_in_bulk=True)
@@ -576,20 +605,34 @@ elif st.session_state.step == 3 and st.session_state.authed:
         render_field("契約種別", "契約種別", 1, editable_in_bulk=False)
         render_field("メーカー", "メーカー", 1, editable_in_bulk=False)
 
-    # ③ 通報・受付情報（表示のみ：受信時刻のみ表示）
-    with st.expander("③ 通報・受付情報（表示）", expanded=True):
-        render_field("受信時刻", "受信時刻", 1, placeholder="2025/11/10 09:30 など", editable_in_bulk=False)
+    # ③ 受付・現着・完了（表示）: 時刻と3つの差分時間
+    with st.expander("③ 受付・現着・完了（表示）", expanded=True):
+        render_field("受信時刻", "受信時刻", 1, editable_in_bulk=False)
+        render_field("現着時刻", "現着時刻", 1, editable_in_bulk=False)
+        render_field("完了時刻", "完了時刻", 1, editable_in_bulk=False)
 
-    # ④ 現着・作業・完了情報（表示のみ：時刻＆概算時間）
-    with st.expander("④ 現着・作業・完了情報（表示）", expanded=True):
-        render_field("現着時刻", "現着時刻", 1, placeholder="2025/11/10 10:05", editable_in_bulk=False)
-        render_field("完了時刻", "完了時刻", 1, placeholder="2025/11/10 11:20", editable_in_bulk=False)
-        dur = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
-        if dur is not None and dur >= 0:
-            st.info(f"作業時間（概算）：{dur} 分")
+        t_recv_to_arrive = minutes_between(data.get("受信時刻"), data.get("現着時刻"))
+        t_work = minutes_between(data.get("現着時刻"), data.get("完了時刻"))
+        t_recv_to_done = minutes_between(data.get("受信時刻"), data.get("完了時刻"))
 
-    # ⑤ その他情報（表示のみ）
-    with st.expander("⑤ その他情報（表示）", expanded=False):
+        def _fmt_minutes(v: Optional[int]) -> str:
+            return f"{v} 分" if (v is not None and v >= 0) else "—"
+
+        st.markdown(
+            f"""
+            <div class="duration-box">
+              <div class="duration-row">
+                <div class="duration-item"><b>受付〜現着時間:</b> {_fmt_minutes(t_recv_to_arrive)}</div>
+                <div class="duration-item"><b>作業時間:</b> {_fmt_minutes(t_work)}</div>
+                <div class="duration-item"><b>受付〜完了時間:</b> {_fmt_minutes(t_recv_to_done)}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ④ その他情報（表示のみ）
+    with st.expander("④ その他情報（表示）", expanded=False):
         render_field("対応者", "対応者", 1, editable_in_bulk=False)
         render_field("送信者", "送信者", 1, editable_in_bulk=False)
         render_field("受付番号", "受付番号", 1, editable_in_bulk=False)
@@ -601,6 +644,7 @@ elif st.session_state.step == 3 and st.session_state.authed:
     # --- Excel出力 ---
     try:
         gen_data = _get_working_dict()
+        missing_now = [k for k in REQUIRED_KEYS if _is_required_missing(gen_data, k)]
         xlsx_bytes = fill_template_xlsx(st.session_state.template_xlsx_bytes, gen_data)
         fname = build_filename(gen_data)
         st.download_button(
@@ -609,9 +653,11 @@ elif st.session_state.step == 3 and st.session_state.authed:
             file_name=fname,
             mime="application/vnd.ms-excel.sheet.macroEnabled.12",
             use_container_width=True,
-            disabled=bool([k for k in REQUIRED_KEYS if _is_required_missing(gen_data, k)]),
+            disabled=bool(missing_now),
             help="必須項目の未入力がある場合は生成できません",
         )
+        if missing_now:
+            st.error("未入力の必須項目があります： " + "・".join(missing_now))
     except Exception as e:
         st.error(f"テンプレート書き込み中にエラーが発生しました: {e}")
         with st.expander("詳細（開発者向け）"):
