@@ -115,9 +115,8 @@ def normalize_text(text: str) -> str:
     if not text:
         return ""
     t = unicodedata.normalize("NFKC", text)
-    t = t.replace("：", ":")  # コロン統一（NFKCでも残る場合に備え二重化）
+    t = t.replace("：", ":")  # コロン統一
     t = t.replace("\t", " ").replace("\r\n", "\n").replace("\r", "\n")
-    # 余計な全角空白を半角へ（NFKCで落ちるが保険）
     t = t.replace("\u3000", " ")
     return t
 
@@ -162,7 +161,6 @@ def _split_lines(text: Optional[str], max_lines: int = 5) -> List[str]:
     return lines[: max_lines - 1] + [lines[max_lines - 1] + "…"]
 
 # ====== 行パーサ版 抽出ロジック（巻き込み防止・堅牢） ======
-# ラベル → 保存先キーへの正規化マップ
 LABEL_CANON = {
     "管理番号": "管理番号",
     "物件名": "物件名",
@@ -183,12 +181,11 @@ LABEL_CANON = {
     "対応者": "対応者",
     "完了連絡先1": "完了連絡先1",
     "送信者": "送信者",
-    "詳細はこちら": "受付URL",          # URL格納
+    "詳細はこちら": "受付URL",
     "現着・完了登録はこちら": "現着完了登録URL",
     "受付番号": "受付番号",
 }
 MULTILINE_KEYS = {"受信内容", "現着状況", "原因", "処置内容"}
-
 LABEL_REGEX = re.compile(r"^\s*([^\s:：]+(?:・[^\s:：]+)?)\s*[:：]\s*(.*)$")
 
 def _strip_url_tail(u: str) -> str:
@@ -198,7 +195,6 @@ def extract_fields(raw_text: str) -> Dict[str, Optional[str]]:
     t = normalize_text(raw_text)
     lines = t.split("\n")
 
-    # 出力初期化
     out_keys = {
         "管理番号","物件名","住所","窓口会社","メーカー","制御方式","契約種別",
         "受信時刻","通報者","現着時刻","完了時刻",
@@ -231,7 +227,7 @@ def extract_fields(raw_text: str) -> Dict[str, Optional[str]]:
     while i < len(lines):
         line = lines[i]
 
-        # URL待ち行（ラベル行の次に来るURL）
+        # URL待ち（ラベル行の次に来るURL）
         if awaiting_url_for and line.strip().startswith("http"):
             out[awaiting_url_for] = _strip_url_tail(line)
             awaiting_url_for = None
@@ -240,26 +236,21 @@ def extract_fields(raw_text: str) -> Dict[str, Optional[str]]:
 
         m = LABEL_REGEX.match(line)
         if m:
-            # 直前の複数行ブロックを閉じる
             _flush_buffer()
 
             raw_label = m.group(1).strip()
             value_part = m.group(2).strip()
             canon = LABEL_CANON.get(raw_label)
-
             if canon is None:
-                # 知らないラベルはスキップ（巻き込み防止）
                 i += 1
                 continue
 
             if canon in MULTILINE_KEYS:
-                # 複数行ブロック開始：その行の右辺を最初の行として入れる
                 current_multikey = canon
                 buffer = []
                 if value_part:
                     buffer.append(value_part)
             elif canon in ("受付URL", "現着完了登録URL"):
-                # URLは同一行か次行に来る
                 url = None
                 if "http" in value_part:
                     murl = re.search(r"(https?://\S+)", value_part)
@@ -268,15 +259,14 @@ def extract_fields(raw_text: str) -> Dict[str, Optional[str]]:
                 if url:
                     out[canon] = url
                 else:
-                    awaiting_url_for = canon  # 次のURL行を待つ
+                    awaiting_url_for = canon
             else:
-                # 単行
                 if canon == "管理番号" and not value_part and subject_manageno:
                     out[canon] = subject_manageno
                 else:
                     out[canon] = value_part or out.get(canon)
 
-            # 受付番号は「詳細はこちら」の行に混在することがあるので、行全体からも拾う
+            # 行内/文中の受付番号も拾う
             if "受付番号" in raw_label or "受付番号" in line:
                 mnum = re.search(r"受付番号\s*[:：]\s*([0-9]+)", line)
                 if mnum:
@@ -289,25 +279,19 @@ def extract_fields(raw_text: str) -> Dict[str, Optional[str]]:
         if current_multikey:
             buffer.append(line)
         else:
-            # ラベル外の行に「受付番号:xxxx」が紛れていても拾う
             if out.get("受付番号") is None:
                 mnum = re.search(r"受付番号\s*[:：]\s*([0-9]+)", line)
                 if mnum:
                     out["受付番号"] = mnum.group(1).strip()
-            # URL待ち以外の行は無視（巻き込み防止）
         i += 1
 
-    # 終端フラッシュ
     _flush_buffer()
 
-    # 管理番号の件名補完
     if not out.get("管理番号") and subject_manageno:
         out["管理番号"] = subject_manageno
 
-    # 作業時間（分）
     dur = minutes_between(out.get("現着時刻"), out.get("完了時刻"))
     out["作業時間_分"] = str(dur) if dur is not None and dur >= 0 else None
-
     return out
 
 # ====== テンプレ書き込み ======
@@ -514,9 +498,13 @@ elif st.session_state.step == 3 and st.session_state.authed:
         else:
             st.write("")
     with tb3:
+        # ← ここを if/else に修正（裸の式を排除）
         working = _get_working_dict()
         miss = [k for k in REQUIRED_KEYS if _is_required_missing(working, k)]
-        st.warning("必須未入力: " + "・".join(miss)) if miss else st.info("必須は入力済み")
+        if miss:
+            st.warning("必須未入力: " + "・".join(miss))
+        else:
+            st.info("必須は入力済み")
     with tb4:
         mode = "ON" if st.session_state.edit_mode else "OFF"
         st.markdown(f"**編集モード:** {mode} " + ("" if not st.session_state.edit_mode else '<span class="edit-badge">一括編集中（指定項目のみ編集可）</span>'),
